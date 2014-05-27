@@ -8,6 +8,7 @@ import org.jfree.chart.ChartUtilities;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.plot.PiePlot;
 import org.jfree.data.general.DefaultPieDataset;
+import org.neo4j.graphdb.Direction;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.Node;
@@ -44,11 +45,18 @@ public class Main {
 		try {
 			
 			Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Package);
-			long attemptedpackages = Iterables.count(packagenodes);
+			long attemptedpackages = 0;
+			long successfulpackages = 0;
+			for(Node packagenode : packagenodes){
+				attemptedpackages += 1;
+				if(packagenode.hasRelationship(Direction.OUTGOING, RelationshipTypes.DECLARATION)){
+					successfulpackages += 1;
+				}
+			}
 			
 			long allpackages = 40160;
 			
-			plotPackages(allpackages - attemptedpackages, attemptedpackages, 1034);
+			plotPackages(allpackages - attemptedpackages, attemptedpackages - successfulpackages, successfulpackages);
 
 			tx.success();
 		} finally {
