@@ -8,15 +8,55 @@ import org.jfree.chart.ChartUtilities;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.plot.PiePlot;
 import org.jfree.data.general.DefaultPieDataset;
+import org.neo4j.graphdb.GraphDatabaseService;
+import org.neo4j.graphdb.Label;
+import org.neo4j.graphdb.RelationshipType;
+import org.neo4j.graphdb.Transaction;
+import org.neo4j.graphdb.factory.GraphDatabaseFactory;
+import org.neo4j.helpers.collection.Iterables;
+import org.neo4j.tooling.GlobalGraphOperations;
 
 public class Main {
+
+	public static final String DB_PATH = "data";
 	
-	public static void main(String[] args) throws IOException{
-		
-        plotPackages(30000,2355,1034);
-		
+	public enum Labels implements Label
+	{
+		Package,
+		Declaration,
+		Symbol
+    }
+	
+	private static enum RelationshipTypes implements RelationshipType
+	{
+		DEPENDENCY,
+	    DECLARATION,
+	    MENTIONEDSYMBOL,
+	    DECLAREDSYMBOL
+	}
+
+	public static void main(String[] args) throws IOException {
+
+		GraphDatabaseService graphDb = new GraphDatabaseFactory().newEmbeddedDatabase(DB_PATH);
+
+		Transaction tx = graphDb.beginTx();
+		try {
+			
+			Number attemptedpackages = Iterables.count(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Package));
+			
+			System.out.println(attemptedpackages);
+			
+			plotPackages(30000, attemptedpackages, 1034);
+
+			tx.success();
+		} finally {
+			tx.close();
+		}
+
+		graphDb.shutdown();
+
 		System.out.println("done");
-		
+
 	}
 	
 	public static void plotPackages(Number allpackages,Number attemptedpackages,Number successfulpackages) throws IOException{
