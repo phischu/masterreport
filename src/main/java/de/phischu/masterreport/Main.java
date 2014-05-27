@@ -44,11 +44,11 @@ public class Main {
 		try {
 			
 			Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Package);
-			Number attemptedpackages = Iterables.count(packagenodes);
+			long attemptedpackages = Iterables.count(packagenodes);
 			
-			System.out.println(attemptedpackages);
+			long allpackages = 40160;
 			
-			plotPackages(30000, attemptedpackages, 1034);
+			plotPackages(allpackages - attemptedpackages, attemptedpackages, 1034);
 
 			tx.success();
 		} finally {
