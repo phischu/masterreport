@@ -10,6 +10,7 @@ import org.jfree.chart.plot.PiePlot;
 import org.jfree.data.general.DefaultPieDataset;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Label;
+import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
@@ -42,7 +43,8 @@ public class Main {
 		Transaction tx = graphDb.beginTx();
 		try {
 			
-			Number attemptedpackages = Iterables.count(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Package));
+			Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Package);
+			Number attemptedpackages = Iterables.count(packagenodes);
 			
 			System.out.println(attemptedpackages);
 			
