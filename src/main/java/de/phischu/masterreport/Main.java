@@ -54,7 +54,16 @@ public class Main {
 			
 			plotPackages(graphDb);
 			
-			System.out.println(differentButCompatibleASTs(graphDb).size());
+			Set<Pair<String,String>> astpairs = IteratorUtil.asSet(differentButCompatibleASTs(graphDb));
+			
+			System.out.println(astpairs.size());
+			
+			for(Pair<String,String> astpair : astpairs){
+				System.out.println("AST ONE");
+				System.out.println(astpair.first());
+				System.out.println("AST TWO");
+				System.out.println(astpair.other());
+			}
 
 			tx.success();
 		} finally {
@@ -119,14 +128,25 @@ public class Main {
 					Node packagenode1 = declarationnode1.getSingleRelationship(RelationshipTypes.DECLARATION, Direction.INCOMING).getStartNode();
 					Node packagenode2 = declarationnode2.getSingleRelationship(RelationshipTypes.DECLARATION, Direction.INCOMING).getStartNode();
 					
-					Iterable<Node> dependingnodes1 = previousNodes(RelationshipTypes.DEPENDENCY,packagenode1);
-					Iterable<Node> dependingnodes2 = previousNodes(RelationshipTypes.DEPENDENCY,packagenode2);
+					Iterable<Node> dependingpackagenodes1 = previousNodes(RelationshipTypes.DEPENDENCY,packagenode1);
+					Iterable<Node> dependingpackagenodes2 = previousNodes(RelationshipTypes.DEPENDENCY,packagenode2);
 					
-					Set<Node> intersection = IteratorUtil.asSet(dependingnodes1);
-					intersection.retainAll(IteratorUtil.asCollection(dependingnodes2));
-					if(!intersection.isEmpty()) continue;
+					Set<Node> dependingpackagenodes = IteratorUtil.asSet(dependingpackagenodes1);
+					dependingpackagenodes.retainAll(IteratorUtil.asCollection(dependingpackagenodes2));
 					
-					declarationastpairs.add(Pair.of(declarationast1, declarationast2));
+					for(Node dependingpackagenode : dependingpackagenodes){
+						
+						Iterable<Node> dependingdeclarationnodes = nextNodes(RelationshipTypes.DECLARATION,dependingpackagenode);
+						Iterable<Node> mentioningdeclarationnodes = previousNodes(RelationshipTypes.MENTIONEDSYMBOL, symbolnode);
+						
+					    Set<Node> intersection = IteratorUtil.asSet(dependingdeclarationnodes);
+					    intersection.retainAll(IteratorUtil.asCollection(mentioningdeclarationnodes));
+						
+						if(!intersection.isEmpty()){
+							declarationastpairs.add(Pair.of(declarationast1, declarationast2));
+							break;
+						}
+					}
 				}
 			}
 		}
@@ -135,6 +155,14 @@ public class Main {
 		
 	}
 	
+	private static Iterable<Node> nextNodes(RelationshipTypes relationshiptype,Node node) {
+		return Iterables.map(
+				new Function<Relationship,Node>(){
+					public Node apply(Relationship relationship) {
+						return relationship.getEndNode();}},
+				node.getRelationships(Direction.OUTGOING, relationshiptype));
+	}
+
 	public static Iterable<Node> previousNodes(RelationshipType relationshiptype,Node node){
 		return Iterables.map(
 				new Function<Relationship,Node>(){
