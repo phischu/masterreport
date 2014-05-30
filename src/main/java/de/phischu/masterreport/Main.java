@@ -20,7 +20,7 @@ import org.neo4j.tooling.GlobalGraphOperations;
 
 public class Main {
 
-	public static final String DB_PATH = "data";
+	public static final String DB_PATH = "/home/pschuster/Projects/symbols/data";
 	
 	public enum Labels implements Label
 	{
