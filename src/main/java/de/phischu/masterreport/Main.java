@@ -20,7 +20,7 @@ import org.neo4j.tooling.GlobalGraphOperations;
 
 public class Main {
 
-	public static final String DB_PATH = "/home/pschuster/Projects/symbols/data";
+	public static final String DB_PATH = "data";
 	
 	public enum Labels implements Label
 	{
@@ -44,19 +44,7 @@ public class Main {
 		Transaction tx = graphDb.beginTx();
 		try {
 			
-			Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Package);
-			long attemptedpackages = 0;
-			long successfulpackages = 0;
-			for(Node packagenode : packagenodes){
-				attemptedpackages += 1;
-				if(packagenode.hasRelationship(Direction.OUTGOING, RelationshipTypes.DECLARATION)){
-					successfulpackages += 1;
-				}
-			}
-			
-			long allpackages = 40160;
-			
-			plotPackages(allpackages - attemptedpackages, attemptedpackages - successfulpackages, successfulpackages);
+			plotPackages(graphDb);
 
 			tx.success();
 		} finally {
@@ -69,11 +57,23 @@ public class Main {
 
 	}
 	
-	public static void plotPackages(Number allpackages,Number attemptedpackages,Number successfulpackages) throws IOException{
+	public static void plotPackages(GraphDatabaseService graphDb) throws IOException{
+		
+		Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Package);
+		long attemptedpackages = 0;
+		long successfulpackages = 0;
+		for(Node packagenode : packagenodes){
+			attemptedpackages += 1;
+			if(packagenode.hasRelationship(Direction.OUTGOING, RelationshipTypes.DECLARATION)){
+				successfulpackages += 1;
+			}
+		}
+		
+		long allpackages = 40160;
 		
 		DefaultPieDataset dataset = new DefaultPieDataset();
-		dataset.setValue("All packages", allpackages);
-		dataset.setValue("Attempted packages", attemptedpackages);
+		dataset.setValue("All packages", allpackages - attemptedpackages);
+		dataset.setValue("Attempted packages", attemptedpackages - successfulpackages);
 		dataset.setValue("Successful packages", successfulpackages);
 		
 		PiePlot plot = new PiePlot(dataset);
