@@ -148,25 +148,6 @@ public class Main {
 		
 	}
 	
-	public static<T> Map<T,Long> histogram(Collection<T> collection){
-		
-		TreeMap<T,Long> result = new TreeMap<T,Long>();
-		
-		for(T e : collection){
-			
-			Long entries = result.get(e);
-			if(entries!=null){
-				entries += 1;
-			}else{
-				entries = (long) 1;
-			}
-			result.put(e, entries);
-			
-		}
-		
-		return result;
-	}
-	
 	public static void plotMentionHistogram(GraphDatabaseService graphDb) throws IOException{
 		
 		Collection<Long> mentions = mention(graphDb).values();
@@ -196,6 +177,42 @@ public class Main {
 
 		ChartUtilities.saveChartAsPNG(new File("mentionhistogram.png"), chart, 1024, 768);
 		
+	}
+	
+	public static void plotDeclarationsHistogram(GraphDatabaseService graphDb) throws IOException{
+		
+		Collection<Long> declarationvalues = declarations(graphDb).values();
+		double[] declarationsarray = new double[declarationvalues.size()];
+		
+		int i = 0;
+		for(Long declarationvalue : declarationvalues){
+			
+			declarationsarray[i] = declarationvalue;
+			i++;
+			
+		}
+		
+		HistogramDataset dataset = new HistogramDataset();
+		dataset.addSeries("", declarationsarray, 10);		
+		
+		LogarithmicAxis rangeaxis = new LogarithmicAxis("Number of Number of Declarations");
+		rangeaxis.setAllowNegativesFlag(true);
+		
+		XYPlot plot = new XYPlot(
+				dataset,
+				new NumberAxis("Number of Declarations"),
+				rangeaxis,
+				new DefaultXYItemRenderer());
+		
+		JFreeChart chart = new JFreeChart(plot);
+
+		ChartUtilities.saveChartAsPNG(new File("declarationhistogram.png"), chart, 1024, 768);
+		
+	}
+
+	private static Map<Long,Long> declarations(GraphDatabaseService graphDb) {
+		// TODO Auto-generated method stub
+		return null;
 	}
 
 	public static Collection<Pair<String, String>> refactoring(
