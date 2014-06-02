@@ -18,10 +18,21 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartUtilities;
 import org.jfree.chart.JFreeChart;
+import org.jfree.chart.axis.LogarithmicAxis;
+import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.plot.PiePlot;
+import org.jfree.chart.plot.PlotOrientation;
+import org.jfree.chart.plot.XYPlot;
+import org.jfree.chart.renderer.xy.DefaultXYItemRenderer;
+import org.jfree.data.category.CategoryDataset;
+import org.jfree.data.category.DefaultCategoryDataset;
 import org.jfree.data.general.DefaultPieDataset;
+import org.jfree.data.statistics.HistogramDataset;
+import org.jfree.data.xy.DefaultIntervalXYDataset;
+import org.jfree.data.xy.DefaultXYDataset;
 import org.neo4j.graphdb.Direction;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Label;
@@ -56,6 +67,8 @@ public class Main {
 		try {
 			
 			plotPackages(graphDb);
+			
+			plotMentionHistogram(graphDb);
 			
 			printRefactorings(IteratorUtil.asSet(refactoring(graphDb)));
 
@@ -99,7 +112,7 @@ public class Main {
 
 		JFreeChart chart = new JFreeChart(plot);
 
-		ChartUtilities.saveChartAsPNG(new File("chart.png"), chart, 1024, 768);
+		ChartUtilities.saveChartAsPNG(new File("hackage.png"), chart, 1024, 768);
 
 	}
 	
@@ -117,9 +130,9 @@ public class Main {
 		
 	}
 	
-	public static Map<Node,Long> mention(GraphDatabaseService graphDb){
+	public static Map<Long,Long> mention(GraphDatabaseService graphDb){
 		
-		TreeMap<Node,Long> mentionmap = new TreeMap<Node,Long>();
+		TreeMap<Long,Long> mentionmap = new TreeMap<Long,Long>();
 		
 		Iterable<Node> symbolnodes = GlobalGraphOperations.at(graphDb)
 				.getAllNodesWithLabel(Labels.Symbol);
@@ -127,7 +140,7 @@ public class Main {
 		for(Node symbolnode : symbolnodes){
 			
 			Iterable<Node> mentioningnodes = previousNodes(RelationshipTypes.MENTIONEDSYMBOL, symbolnode);
-			mentionmap.put(symbolnode, Iterables.count(mentioningnodes));
+			mentionmap.put(symbolnode.getId(), Iterables.count(mentioningnodes));
 			
 		}
 		
@@ -135,11 +148,11 @@ public class Main {
 		
 	}
 	
-	public static<T> Map<T,Long> histogram(Set<T> set){
+	public static<T> Map<T,Long> histogram(Collection<T> collection){
 		
 		TreeMap<T,Long> result = new TreeMap<T,Long>();
 		
-		for(T e : set){
+		for(T e : collection){
 			
 			Long entries = result.get(e);
 			if(entries!=null){
@@ -152,6 +165,37 @@ public class Main {
 		}
 		
 		return result;
+	}
+	
+	public static void plotMentionHistogram(GraphDatabaseService graphDb) throws IOException{
+		
+		Collection<Long> mentions = mention(graphDb).values();
+		double[] mentionarray = new double[mentions.size()];
+		
+		int i = 0;
+		for(Long m : mentions){
+			
+			mentionarray[i] = Math.log(m+1);
+			i++;
+			
+		}
+		
+		HistogramDataset dataset = new HistogramDataset();
+		dataset.addSeries("", mentionarray, 10);		
+		
+		LogarithmicAxis rangeaxis = new LogarithmicAxis("Number of Number of mentions");
+		rangeaxis.setAllowNegativesFlag(true);
+		
+		XYPlot plot = new XYPlot(
+				dataset,
+				new NumberAxis("ln(Number of Mentions)"),
+				rangeaxis,
+				new DefaultXYItemRenderer());
+		
+		JFreeChart chart = new JFreeChart(plot);
+
+		ChartUtilities.saveChartAsPNG(new File("mentionhistogram.png"), chart, 1024, 768);
+		
 	}
 
 	public static Collection<Pair<String, String>> refactoring(
