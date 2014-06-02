@@ -70,6 +70,8 @@ public class Main {
 			
 			plotMentionHistogram(graphDb);
 			
+			plotDeclarationsHistogram(graphDb);
+			
 			printRefactorings(IteratorUtil.asSet(refactoring(graphDb)));
 
 			tx.success();
@@ -193,16 +195,14 @@ public class Main {
 		}
 		
 		HistogramDataset dataset = new HistogramDataset();
-		dataset.addSeries("", declarationsarray, 10);		
+		dataset.addSeries("", declarationsarray, 160);	
+		
+		NumberAxis domainaxis = new NumberAxis();
 		
 		LogarithmicAxis rangeaxis = new LogarithmicAxis("Number of Number of Declarations");
 		rangeaxis.setAllowNegativesFlag(true);
 		
-		XYPlot plot = new XYPlot(
-				dataset,
-				new NumberAxis("Number of Declarations"),
-				rangeaxis,
-				new DefaultXYItemRenderer());
+		XYPlot plot = new XYPlot(dataset, domainaxis, rangeaxis, new DefaultXYItemRenderer());
 		
 		JFreeChart chart = new JFreeChart(plot);
 
@@ -211,8 +211,26 @@ public class Main {
 	}
 
 	private static Map<Long,Long> declarations(GraphDatabaseService graphDb) {
-		// TODO Auto-generated method stub
-		return null;
+		
+			TreeMap<Long,Long> declarationsmap = new TreeMap<Long,Long>();
+			
+			Iterable<Node> symbolnodes = GlobalGraphOperations.at(graphDb)
+					.getAllNodesWithLabel(Labels.Symbol);
+			
+			for(Node symbolnode : symbolnodes){
+				
+				Iterable<Node> declaringnodes = previousNodes(RelationshipTypes.DECLAREDSYMBOL, symbolnode);
+				
+				TreeSet<String> declaringasts = new TreeSet<String>();
+				for(Node declaringnode : declaringnodes){
+					declaringasts.add((String) declaringnode.getProperty("declarationast"));
+				}
+				
+				declarationsmap.put(symbolnode.getId(), (long) declaringasts.size());
+				
+			}
+			
+			return declarationsmap;
 	}
 
 	public static Collection<Pair<String, String>> refactoring(
@@ -225,11 +243,10 @@ public class Main {
 
 		for (Node symbolnode : symbolnodes) {
 
-			Iterable<Pair<Node, Node>> usages = usage(symbolnode);
+			Collection<Pair<Node, Node>> usages = IteratorUtil.asCollection(usage(symbolnode));
 
-			for (Pair<Node, Node> usage1 : IteratorUtil.asCollection(usages)) {
-				for (Pair<Node, Node> usage2 : IteratorUtil
-						.asCollection(usages)) {
+			for (Pair<Node, Node> usage1 : usages) {
+				for (Pair<Node, Node> usage2 : usages) {
 
 					String usingast1 = (String) usage1.first().getProperty(
 							"declarationast");
