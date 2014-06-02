@@ -54,7 +54,7 @@ public class Main {
 			
 			plotPackages(graphDb);
 			
-			Set<Pair<String,String>> astpairs = IteratorUtil.asSet(differentButCompatibleASTs(graphDb));
+			Set<Pair<String,String>> astpairs = IteratorUtil.asSet(refactoring(graphDb));
 			
 			System.out.println(astpairs.size());
 			
@@ -106,7 +106,7 @@ public class Main {
 		
 	}
 	
-	public static Collection<Pair<String,String>> differentButCompatibleASTs(GraphDatabaseService graphDb){
+	public static Collection<Pair<String,String>> refactoring(GraphDatabaseService graphDb){
 		
 		Collection<Pair<String,String>> declarationastpairs = new LinkedList<Pair<String,String>>();
 		
@@ -114,47 +114,33 @@ public class Main {
 		
 		for(Node symbolnode : symbolnodes){
 			
-			Collection<Node> declarationnodes = IteratorUtil.asCollection(
-					previousNodes(RelationshipTypes.DECLAREDSYMBOL, symbolnode));
-			
-			for(Node declarationnode1 : declarationnodes){
-				for(Node declarationnode2 : declarationnodes){
-					
-					String declarationast1 = (String) declarationnode1.getProperty("declarationast");
-					String declarationast2 = (String) declarationnode2.getProperty("declarationast");
-					
-					if(declarationast1.equals(declarationast2)) continue;
-					
-					Node packagenode1 = declarationnode1.getSingleRelationship(RelationshipTypes.DECLARATION, Direction.INCOMING).getStartNode();
-					Node packagenode2 = declarationnode2.getSingleRelationship(RelationshipTypes.DECLARATION, Direction.INCOMING).getStartNode();
-					
-					Iterable<Node> dependingpackagenodes1 = previousNodes(RelationshipTypes.DEPENDENCY,packagenode1);
-					Iterable<Node> dependingpackagenodes2 = previousNodes(RelationshipTypes.DEPENDENCY,packagenode2);
-					
-					Set<Node> dependingpackagenodes = IteratorUtil.asSet(dependingpackagenodes1);
-					dependingpackagenodes.retainAll(IteratorUtil.asCollection(dependingpackagenodes2));
-					
-					for(Node dependingpackagenode : dependingpackagenodes){
-						
-						Iterable<Node> dependingdeclarationnodes = nextNodes(RelationshipTypes.DECLARATION,dependingpackagenode);
-						Iterable<Node> mentioningdeclarationnodes = previousNodes(RelationshipTypes.MENTIONEDSYMBOL, symbolnode);
-						
-					    Set<Node> intersection = IteratorUtil.asSet(dependingdeclarationnodes);
-					    intersection.retainAll(IteratorUtil.asCollection(mentioningdeclarationnodes));
-						
-						if(!intersection.isEmpty()){
-							declarationastpairs.add(Pair.of(declarationast1, declarationast2));
-							break;
-						}
+			Iterable<Pair<Node,Node>> usages = usage(symbolnode);
+			for(Pair<Node,Node> usage1 : IteratorUtil.asCollection(usages)){
+				for(Pair<Node,Node> usage2 : IteratorUtil.asCollection(usages)){
+					String usingast1 = (String) usage1.first().getProperty("declarationast");
+					String usedast1 = (String) usage1.other().getProperty("declarationast");
+					String usingast2 = (String) usage2.first().getProperty("declarationast");
+					String usedast2 = (String) usage2.other().getProperty("declarationast");
+					if(usingast1.equals(usingast2) && !usedast1.equals(usedast2)){
+						declarationastpairs.add(Pair.of(usedast1, usedast2));
 					}
 				}
 			}
+			
+			
 		}
+			
+		
 		
 		return declarationastpairs;
 		
 	}
 	
+	private static Iterable<Pair<Node, Node>> usage(Node symbolnode) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
 	private static Iterable<Node> nextNodes(RelationshipTypes relationshiptype,Node node) {
 		return Iterables.map(
 				new Function<Relationship,Node>(){
