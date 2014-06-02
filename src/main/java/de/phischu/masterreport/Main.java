@@ -7,11 +7,15 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 import org.jfree.chart.ChartUtilities;
@@ -69,8 +73,7 @@ public class Main {
 	public static void plotPackages(GraphDatabaseService graphDb)
 			throws IOException {
 
-		Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb)
-				.getAllNodesWithLabel(Labels.Package);
+		Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Package);
 		long attemptedpackages = 0;
 		long successfulpackages = 0;
 		for (Node packagenode : packagenodes) {
@@ -112,6 +115,43 @@ public class Main {
 		}
 		writer.close();
 		
+	}
+	
+	public static Map<Node,Long> mention(GraphDatabaseService graphDb){
+		
+		TreeMap<Node,Long> mentionmap = new TreeMap<Node,Long>();
+		
+		Iterable<Node> symbolnodes = GlobalGraphOperations.at(graphDb)
+				.getAllNodesWithLabel(Labels.Symbol);
+		
+		for(Node symbolnode : symbolnodes){
+			
+			Iterable<Node> mentioningnodes = previousNodes(RelationshipTypes.MENTIONEDSYMBOL, symbolnode);
+			mentionmap.put(symbolnode, Iterables.count(mentioningnodes));
+			
+		}
+		
+		return mentionmap;
+		
+	}
+	
+	public static<T> Map<T,Long> histogram(Set<T> set){
+		
+		TreeMap<T,Long> result = new TreeMap<T,Long>();
+		
+		for(T e : set){
+			
+			Long entries = result.get(e);
+			if(entries!=null){
+				entries += 1;
+			}else{
+				entries = (long) 1;
+			}
+			result.put(e, entries);
+			
+		}
+		
+		return result;
 	}
 
 	public static Collection<Pair<String, String>> refactoring(
