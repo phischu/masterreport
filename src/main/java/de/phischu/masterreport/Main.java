@@ -2,8 +2,10 @@ package de.phischu.masterreport;
 
 import java.awt.Color;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -51,17 +53,7 @@ public class Main {
 			
 			plotPackages(graphDb);
 			
-			Set<Pair<String,String>> astpairs = IteratorUtil.asSet(refactoring(graphDb));
-			
-			PrintWriter writer = new PrintWriter("refactorings", "UTF-8");
-			writer.println(astpairs.size());
-			for(Pair<String,String> astpair : astpairs){
-				writer.println("AST ONE");
-				writer.println(astpair.first());
-				writer.println("AST TWO");
-				writer.println(astpair.other());
-			}
-			writer.close();
+			printRefactorings(IteratorUtil.asSet(refactoring(graphDb)));
 
 			tx.success();
 		} finally {
@@ -106,6 +98,20 @@ public class Main {
 
 		ChartUtilities.saveChartAsPNG(new File("chart.png"), chart, 1024, 768);
 
+	}
+	
+	public static void printRefactorings(Collection<Pair<String,String>> astpairs) throws FileNotFoundException, UnsupportedEncodingException{
+		
+		PrintWriter writer = new PrintWriter("refactorings", "UTF-8");
+		writer.println(astpairs.size());
+		for(Pair<String,String> astpair : astpairs){
+			writer.println("AST ONE");
+			writer.println(astpair.first());
+			writer.println("AST TWO");
+			writer.println(astpair.other());
+		}
+		writer.close();
+		
 	}
 
 	public static Collection<Pair<String, String>> refactoring(
