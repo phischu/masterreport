@@ -152,19 +152,8 @@ public class Main {
 	
 	public static void plotMentionHistogram(GraphDatabaseService graphDb) throws IOException{
 		
-		Collection<Long> mentions = mention(graphDb).values();
-		double[] mentionarray = new double[mentions.size()];
-		
-		int i = 0;
-		for(Long m : mentions){
-			
-			mentionarray[i] = Math.log(m+1);
-			i++;
-			
-		}
-		
 		HistogramDataset dataset = new HistogramDataset();
-		dataset.addSeries("", mentionarray, 10);		
+		dataset.addSeries("", toDoubles(mention(graphDb).values()), 10);		
 		
 		LogarithmicAxis rangeaxis = new LogarithmicAxis("Number of Number of mentions");
 		rangeaxis.setAllowNegativesFlag(true);
@@ -180,22 +169,24 @@ public class Main {
 		ChartUtilities.saveChartAsPNG(new File("mentionhistogram.png"), chart, 1024, 768);
 		
 	}
-	
-	public static void plotDeclarationsHistogram(GraphDatabaseService graphDb) throws IOException{
-		
-		Collection<Long> declarationvalues = declarations(graphDb).values();
-		double[] declarationsarray = new double[declarationvalues.size()];
+
+	private static double[] toDoubles(Collection<Long> mentions) {
+		double[] mentionarray = new double[mentions.size()];
 		
 		int i = 0;
-		for(Long declarationvalue : declarationvalues){
+		for(Long m : mentions){
 			
-			declarationsarray[i] = declarationvalue;
+			mentionarray[i] = Math.log(m+1);
 			i++;
 			
 		}
+		return mentionarray;
+	}
+	
+	public static void plotDeclarationsHistogram(GraphDatabaseService graphDb) throws IOException{
 		
 		HistogramDataset dataset = new HistogramDataset();
-		dataset.addSeries("", declarationsarray, 160);	
+		dataset.addSeries("", toDoubles(declarations(graphDb).values()), 160);	
 		
 		NumberAxis domainaxis = new NumberAxis();
 		
