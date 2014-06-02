@@ -3,8 +3,10 @@ package de.phischu.masterreport;
 import java.awt.Color;
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Set;
 
@@ -56,14 +58,15 @@ public class Main {
 			
 			Set<Pair<String,String>> astpairs = IteratorUtil.asSet(refactoring(graphDb));
 			
-			System.out.println(astpairs.size());
-			
+			PrintWriter writer = new PrintWriter("refactorings", "UTF-8");
+			writer.println(astpairs.size());
 			for(Pair<String,String> astpair : astpairs){
-				System.out.println("AST ONE");
-				System.out.println(astpair.first());
-				System.out.println("AST TWO");
-				System.out.println(astpair.other());
+				writer.println("AST ONE");
+				writer.println(astpair.first());
+				writer.println("AST TWO");
+				writer.println(astpair.other());
 			}
+			writer.close();
 
 			tx.success();
 		} finally {
@@ -115,30 +118,54 @@ public class Main {
 		for(Node symbolnode : symbolnodes){
 			
 			Iterable<Pair<Node,Node>> usages = usage(symbolnode);
+			
 			for(Pair<Node,Node> usage1 : IteratorUtil.asCollection(usages)){
 				for(Pair<Node,Node> usage2 : IteratorUtil.asCollection(usages)){
+					
 					String usingast1 = (String) usage1.first().getProperty("declarationast");
 					String usedast1 = (String) usage1.other().getProperty("declarationast");
 					String usingast2 = (String) usage2.first().getProperty("declarationast");
 					String usedast2 = (String) usage2.other().getProperty("declarationast");
+					
 					if(usingast1.equals(usingast2) && !usedast1.equals(usedast2)){
 						declarationastpairs.add(Pair.of(usedast1, usedast2));
 					}
+					
 				}
 			}
 			
 			
 		}
 			
-		
-		
 		return declarationastpairs;
 		
 	}
 	
 	private static Iterable<Pair<Node, Node>> usage(Node symbolnode) {
-		// TODO Auto-generated method stub
-		return null;
+		
+		LinkedList<Pair<Node,Node>> usages = new LinkedList<Pair<Node,Node>>();
+		
+		Iterable<Node> usingnodes = previousNodes(RelationshipTypes.MENTIONEDSYMBOL, symbolnode);
+		Iterable<Node> usednodes = previousNodes(RelationshipTypes.DECLAREDSYMBOL, symbolnode);
+		
+		for(Node usingnode : usingnodes){
+			for(Node usednode : usednodes){
+				
+				for(Node dependingnode : previousNodes(RelationshipTypes.DECLARATION,usingnode)){
+					for(Node dependencynode : previousNodes(RelationshipTypes.DECLARATION, usednode)){
+						
+						Collection<Node> dependencynodes = IteratorUtil.asCollection(nextNodes(RelationshipTypes.DEPENDENCY,dependingnode));
+						
+						if(dependencynodes.contains(dependencynode)){
+							usages.add(Pair.of(usingnode, usednode));
+						}
+					}
+				}
+			}
+		}
+		
+		return usages;
+		
 	}
 
 	private static Iterable<Node> nextNodes(RelationshipTypes relationshiptype,Node node) {
