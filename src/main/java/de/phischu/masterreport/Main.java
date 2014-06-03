@@ -66,6 +66,8 @@ public class Main {
 		Transaction tx = graphDb.beginTx();
 		try {
 			
+			printCounts(graphDb);
+			
 			plotPackages(graphDb);
 			
 			plotMentionHistogram(graphDb);
@@ -83,6 +85,31 @@ public class Main {
 
 		System.out.println("done");
 
+	}
+
+	public static void printCounts(GraphDatabaseService graphDb) throws FileNotFoundException, UnsupportedEncodingException {
+		
+		Long packagecount = Iterables.count(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Package));
+		
+	    Iterable<Node> declarationnodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Declaration);
+		Long declarationcount = Iterables.count(declarationnodes);
+		
+		TreeSet<String> declarationasts = new TreeSet<String>();
+		for(Node declarationnode : declarationnodes){
+			declarationasts.add((String) declarationnode.getProperty("declarationast"));
+		}
+		int declarationastcount = declarationasts.size();
+				
+		Long symbolcount = Iterables.count(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Symbol));
+		
+		PrintWriter writer = new PrintWriter("counts", "UTF-8");
+		writer.println("Package count: " + packagecount);
+		writer.println("Declaration count: " + declarationcount);
+		writer.println("Declaration AST count: " + declarationastcount);
+		writer.println("Symbol count: " + symbolcount);
+		
+		writer.close();
+		
 	}
 
 	public static void plotPackages(GraphDatabaseService graphDb)
