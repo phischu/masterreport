@@ -7,32 +7,20 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartUtilities;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.LogarithmicAxis;
 import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.plot.PiePlot;
-import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.renderer.xy.DefaultXYItemRenderer;
-import org.jfree.data.category.CategoryDataset;
-import org.jfree.data.category.DefaultCategoryDataset;
 import org.jfree.data.general.DefaultPieDataset;
 import org.jfree.data.statistics.HistogramDataset;
-import org.jfree.data.xy.DefaultIntervalXYDataset;
-import org.jfree.data.xy.DefaultXYDataset;
 import org.neo4j.graphdb.Direction;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Label;
@@ -41,10 +29,10 @@ import org.neo4j.graphdb.Relationship;
 import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
-import org.neo4j.helpers.collection.Iterables;
-import org.neo4j.helpers.collection.IteratorUtil;
 import org.neo4j.helpers.Function;
 import org.neo4j.helpers.Pair;
+import org.neo4j.helpers.collection.Iterables;
+import org.neo4j.helpers.collection.IteratorUtil;
 import org.neo4j.tooling.GlobalGraphOperations;
 
 public class Main {
@@ -74,7 +62,7 @@ public class Main {
 			
 			plotDeclarationsHistogram(graphDb);
 			
-			printRefactorings(IteratorUtil.asSet(refactoring(graphDb)));
+			printRefactorings(IteratorUtil.asSet(refactorings(graphDb)));
 
 			tx.success();
 		} finally {
@@ -213,7 +201,7 @@ public class Main {
 	public static void plotDeclarationsHistogram(GraphDatabaseService graphDb) throws IOException{
 		
 		HistogramDataset dataset = new HistogramDataset();
-		dataset.addSeries("", toDoubles(declarations(graphDb).values()), 160);	
+		dataset.addSeries("", toDoubles(differentASTs(graphDb).values()), 160);	
 		
 		NumberAxis domainaxis = new NumberAxis();
 		
@@ -228,7 +216,7 @@ public class Main {
 		
 	}
 
-	private static Map<Long,Long> declarations(GraphDatabaseService graphDb) {
+	private static Map<Long,Long> differentASTs(GraphDatabaseService graphDb) {
 		
 			TreeMap<Long,Long> declarationsmap = new TreeMap<Long,Long>();
 			
@@ -251,7 +239,7 @@ public class Main {
 			return declarationsmap;
 	}
 
-	public static Collection<Pair<String, String>> refactoring(
+	public static Collection<Pair<String, String>> refactorings(
 			GraphDatabaseService graphDb) {
 
 		Collection<Pair<String, String>> declarationastpairs = new LinkedList<Pair<String, String>>();
@@ -261,7 +249,7 @@ public class Main {
 
 		for (Node symbolnode : symbolnodes) {
 
-			Collection<Pair<Node, Node>> usages = IteratorUtil.asCollection(usage(symbolnode));
+			Collection<Pair<Node, Node>> usages = IteratorUtil.asCollection(usages(symbolnode));
 
 			for (Pair<Node, Node> usage1 : usages) {
 				for (Pair<Node, Node> usage2 : usages) {
@@ -289,7 +277,7 @@ public class Main {
 
 	}
 
-	private static Iterable<Pair<Node, Node>> usage(Node symbolnode) {
+	private static Iterable<Pair<Node, Node>> usages(Node symbolnode) {
 
 		LinkedList<Pair<Node, Node>> usages = new LinkedList<Pair<Node, Node>>();
 
