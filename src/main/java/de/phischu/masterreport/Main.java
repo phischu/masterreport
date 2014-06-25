@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.TreeMap;
@@ -29,11 +30,16 @@ import org.neo4j.graphdb.Relationship;
 import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
-import org.neo4j.helpers.Function;
 import org.neo4j.helpers.Pair;
-import org.neo4j.helpers.collection.Iterables;
-import org.neo4j.helpers.collection.IteratorUtil;
 import org.neo4j.tooling.GlobalGraphOperations;
+
+import com.google.common.base.Function;
+import com.google.common.collect.FluentIterable;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Sets;
+
+import static org.neo4j.graphdb.Direction.*;
+import static de.phischu.masterreport.RelationshipTypes.*;
 
 public class Main {
 
@@ -41,10 +47,6 @@ public class Main {
 
 	public enum Labels implements Label {
 		Package, Declaration, Symbol
-	}
-
-	private static enum RelationshipTypes implements RelationshipType {
-		DEPENDENCY, DECLARATION, MENTIONEDSYMBOL, DECLAREDSYMBOL
 	}
 
 	public static void main(String[] args) throws IOException {
@@ -62,7 +64,7 @@ public class Main {
 			
 			plotDeclarationsHistogram(graphDb);
 			
-			printRefactorings(IteratorUtil.asSet(refactorings(graphDb)));
+			printRefactorings(Sets.newTreeSet(refactorings(graphDb)));
 
 			tx.success();
 		} finally {
@@ -156,7 +158,7 @@ public class Main {
 		
 		for(Node symbolnode : symbolnodes){
 			
-			Iterable<Node> mentioningnodes = previousNodes(RelationshipTypes.MENTIONEDSYMBOL, symbolnode);
+			Iterable<Node> mentioningnodes = new Hop(Direction.INCOMING,RelationshipTypes.MENTIONEDSYMBOL).apply(symbolnode);
 			mentionmap.put(symbolnode.getId(), Iterables.count(mentioningnodes));
 			
 		}
@@ -225,7 +227,7 @@ public class Main {
 			
 			for(Node symbolnode : symbolnodes){
 				
-				Iterable<Node> declaringnodes = previousNodes(RelationshipTypes.DECLAREDSYMBOL, symbolnode);
+				Iterable<Node> declaringnodes = new Hop(INCOMING,RelationshipTypes.DECLAREDSYMBOL).apply(symbolnode);
 				
 				TreeSet<String> declaringasts = new TreeSet<String>();
 				for(Node declaringnode : declaringnodes){
@@ -277,32 +279,27 @@ public class Main {
 
 	}
 
-	private static Iterable<Pair<Node, Node>> usages(Node symbolnode) {
+
+	public static Iterable<Pair<Node, Node>> usages(Node symbolnode) {
 
 		LinkedList<Pair<Node, Node>> usages = new LinkedList<Pair<Node, Node>>();
 
-		Iterable<Node> usingnodes = previousNodes(
-				RelationshipTypes.MENTIONEDSYMBOL, symbolnode);
-		Iterable<Node> usednodes = previousNodes(
-				RelationshipTypes.DECLAREDSYMBOL, symbolnode);
+		Iterable<Node> usingdeclarationnodes = new Hop(INCOMING,MENTIONEDSYMBOL).apply(symbolnode);
+		Iterable<Node> useddeclarationnodes = new Hop(INCOMING,DECLAREDSYMBOL).apply(symbolnode);
 
-		for (Node usingnode : usingnodes) {
-			for (Node usednode : usednodes) {
-
-				for (Node dependingnode : previousNodes(
-						RelationshipTypes.DECLARATION, usingnode)) {
-					for (Node dependencynode : previousNodes(
-							RelationshipTypes.DECLARATION, usednode)) {
-
-						Collection<Node> dependencynodes = IteratorUtil
-								.asCollection(nextNodes(
-										RelationshipTypes.DEPENDENCY,
-										dependingnode));
-
-						if (dependencynodes.contains(dependencynode)) {
-							usages.add(Pair.of(usingnode, usednode));
-						}
-					}
+		for (Node usingdeclarationnode : usingdeclarationnodes) {
+			for (Node useddeclarationnode : useddeclarationnodes) {
+				
+				Iterable<Node> dependencynodes = 
+					FluentIterable
+					    .from(Collections.singleton(usingdeclarationnode))
+					    .transformAndConcat(new Hop(INCOMING,DECLARATION))
+					    .transformAndConcat(new Hop(OUTGOING,DEPENDENCY));
+				
+				Iterable<Node> usingpackagenodes = new Hop(Direction.INCOMING,DECLARATION).apply(usingdeclarationnode);
+				
+				if(containsAll(dependencynodes,usingpackagenodes)){
+					usages.add(Pair.of(usingdeclarationnode, useddeclarationnode));
 				}
 			}
 		}
@@ -311,22 +308,12 @@ public class Main {
 
 	}
 
-	private static Iterable<Node> nextNodes(RelationshipTypes relationshiptype,
-			Node node) {
-		return Iterables.map(new Function<Relationship, Node>() {
-			public Node apply(Relationship relationship) {
-				return relationship.getEndNode();
-			}
-		}, node.getRelationships(Direction.OUTGOING, relationshiptype));
-	}
-
-	public static Iterable<Node> previousNodes(
-			RelationshipType relationshiptype, Node node) {
-		return Iterables.map(new Function<Relationship, Node>() {
-			public Node apply(Relationship relationship) {
-				return relationship.getStartNode();
-			}
-		}, node.getRelationships(Direction.INCOMING, relationshiptype));
+	private static boolean containsAll(Iterable<Node> nodes1,Iterable<Node> nodes2) {
+		
+		for(Node node2 : nodes2){
+			if(!Iterables.contains(nodes1, node2)) return false;
+		}
+		return true;
 	}
 
 }
