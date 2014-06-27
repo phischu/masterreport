@@ -1,5 +1,12 @@
 package de.phischu.masterreport;
 
+import static de.phischu.masterreport.RelationshipTypes.DECLARATION;
+import static de.phischu.masterreport.RelationshipTypes.DECLAREDSYMBOL;
+import static de.phischu.masterreport.RelationshipTypes.DEPENDENCY;
+import static de.phischu.masterreport.RelationshipTypes.MENTIONEDSYMBOL;
+import static org.neo4j.graphdb.Direction.INCOMING;
+import static org.neo4j.graphdb.Direction.OUTGOING;
+
 import java.awt.Color;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -26,20 +33,15 @@ import org.neo4j.graphdb.Direction;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.Node;
-import org.neo4j.graphdb.Relationship;
-import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 import org.neo4j.helpers.Pair;
 import org.neo4j.tooling.GlobalGraphOperations;
 
-import com.google.common.base.Function;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-
-import static org.neo4j.graphdb.Direction.*;
-import static de.phischu.masterreport.RelationshipTypes.*;
 
 public class Main {
 
@@ -64,7 +66,7 @@ public class Main {
 			
 			plotDeclarationsHistogram(graphDb);
 			
-			printRefactorings(Sets.newTreeSet(refactorings(graphDb)));
+			printRefactorings(Sets.newHashSet(refactorings(graphDb)));
 
 			tx.success();
 		} finally {
@@ -79,10 +81,10 @@ public class Main {
 
 	public static void printCounts(GraphDatabaseService graphDb) throws FileNotFoundException, UnsupportedEncodingException {
 		
-		Long packagecount = Iterables.count(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Package));
+		int packagecount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Package));
 		
 	    Iterable<Node> declarationnodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Declaration);
-		Long declarationcount = Iterables.count(declarationnodes);
+		int declarationcount = Iterables.size(declarationnodes);
 		
 		TreeSet<String> declarationasts = new TreeSet<String>();
 		for(Node declarationnode : declarationnodes){
@@ -90,7 +92,7 @@ public class Main {
 		}
 		int declarationastcount = declarationasts.size();
 				
-		Long symbolcount = Iterables.count(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Symbol));
+		int symbolcount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Symbol));
 		
 		PrintWriter writer = new PrintWriter("counts", "UTF-8");
 		writer.println("Package count: " + packagecount);
@@ -149,9 +151,9 @@ public class Main {
 		
 	}
 	
-	public static Map<Long,Long> mention(GraphDatabaseService graphDb){
+	public static Map<Long,Integer> mention(GraphDatabaseService graphDb){
 		
-		TreeMap<Long,Long> mentionmap = new TreeMap<Long,Long>();
+		TreeMap<Long,Integer> mentionmap = new TreeMap<Long,Integer>();
 		
 		Iterable<Node> symbolnodes = GlobalGraphOperations.at(graphDb)
 				.getAllNodesWithLabel(Labels.Symbol);
@@ -159,7 +161,7 @@ public class Main {
 		for(Node symbolnode : symbolnodes){
 			
 			Iterable<Node> mentioningnodes = new Hop(Direction.INCOMING,RelationshipTypes.MENTIONEDSYMBOL).apply(symbolnode);
-			mentionmap.put(symbolnode.getId(), Iterables.count(mentioningnodes));
+			mentionmap.put(symbolnode.getId(), Iterables.size(mentioningnodes));
 			
 		}
 		
@@ -187,11 +189,11 @@ public class Main {
 		
 	}
 
-	private static double[] toDoubles(Collection<Long> mentions) {
+	private static double[] toDoubles(Collection<Integer> mentions) {
 		double[] mentionarray = new double[mentions.size()];
 		
 		int i = 0;
-		for(Long m : mentions){
+		for(Integer m : mentions){
 			
 			mentionarray[i] = Math.log(m+1);
 			i++;
@@ -218,9 +220,9 @@ public class Main {
 		
 	}
 
-	private static Map<Long,Long> differentASTs(GraphDatabaseService graphDb) {
+	private static Map<Long,Integer> differentASTs(GraphDatabaseService graphDb) {
 		
-			TreeMap<Long,Long> declarationsmap = new TreeMap<Long,Long>();
+			TreeMap<Long,Integer> declarationsmap = new TreeMap<Long,Integer>();
 			
 			Iterable<Node> symbolnodes = GlobalGraphOperations.at(graphDb)
 					.getAllNodesWithLabel(Labels.Symbol);
@@ -234,7 +236,7 @@ public class Main {
 					declaringasts.add((String) declaringnode.getProperty("declarationast"));
 				}
 				
-				declarationsmap.put(symbolnode.getId(), (long) declaringasts.size());
+				declarationsmap.put(symbolnode.getId(), declaringasts.size());
 				
 			}
 			
@@ -251,7 +253,7 @@ public class Main {
 
 		for (Node symbolnode : symbolnodes) {
 
-			Collection<Pair<Node, Node>> usages = IteratorUtil.asCollection(usages(symbolnode));
+			Collection<Pair<Node, Node>> usages = Lists.newArrayList(usages(symbolnode));
 
 			for (Pair<Node, Node> usage1 : usages) {
 				for (Pair<Node, Node> usage2 : usages) {
