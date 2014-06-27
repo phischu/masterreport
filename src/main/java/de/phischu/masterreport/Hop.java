@@ -29,7 +29,12 @@ public class Hop implements Function<Node,Iterable<Node>>{
 				new Function<Relationship, Node>() {
 					
 					public Node apply(Relationship relationship) {
-						return relationship.getEndNode();
+						if(direction.equals(Direction.OUTGOING)){
+							return relationship.getEndNode();
+						}else{
+							return relationship.getStartNode();
+						}
+						
 					}
 					
 				});

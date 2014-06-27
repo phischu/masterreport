@@ -229,7 +229,7 @@ public class Main {
 			
 			for(Node symbolnode : symbolnodes){
 				
-				Iterable<Node> declaringnodes = new Hop(INCOMING,RelationshipTypes.DECLAREDSYMBOL).apply(symbolnode);
+				Iterable<Node> declaringnodes = new Hop(INCOMING,DECLAREDSYMBOL).apply(symbolnode);
 				
 				TreeSet<String> declaringasts = new TreeSet<String>();
 				for(Node declaringnode : declaringnodes){
