@@ -298,9 +298,9 @@ public class Main {
 					    .transformAndConcat(new Hop(INCOMING,DECLARATION))
 					    .transformAndConcat(new Hop(OUTGOING,DEPENDENCY));
 				
-				Iterable<Node> usingpackagenodes = new Hop(Direction.INCOMING,DECLARATION).apply(usingdeclarationnode);
+				Iterable<Node> usedpackagenodes = new Hop(Direction.INCOMING,DECLARATION).apply(useddeclarationnode);
 				
-				if(containsAll(dependencynodes,usingpackagenodes)){
+				if(containsAll(dependencynodes,usedpackagenodes)){
 					usages.add(Pair.of(usingdeclarationnode, useddeclarationnode));
 				}
 			}
