@@ -4,8 +4,12 @@ import static de.phischu.masterreport.RelationshipTypes.DECLARATION;
 import static de.phischu.masterreport.RelationshipTypes.DECLAREDSYMBOL;
 import static de.phischu.masterreport.RelationshipTypes.DEPENDENCY;
 import static de.phischu.masterreport.RelationshipTypes.MENTIONEDSYMBOL;
+import static de.phischu.masterreport.RelationshipTypes.NEXTVERSION;
 import static org.neo4j.graphdb.Direction.INCOMING;
 import static org.neo4j.graphdb.Direction.OUTGOING;
+import static de.phischu.masterreport.Main.Labels.Package;
+import static de.phischu.masterreport.Main.Labels.Declaration;
+import static de.phischu.masterreport.Main.Labels.Symbol;
 
 import java.awt.Color;
 import java.io.File;
@@ -81,9 +85,9 @@ public class Main {
 
 	public static void printCounts(GraphDatabaseService graphDb) throws FileNotFoundException, UnsupportedEncodingException {
 		
-		int packagecount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Package));
+		int packagecount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package));
 		
-	    Iterable<Node> declarationnodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Declaration);
+	    Iterable<Node> declarationnodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Declaration);
 		int declarationcount = Iterables.size(declarationnodes);
 		
 		TreeSet<String> declarationasts = new TreeSet<String>();
@@ -92,7 +96,7 @@ public class Main {
 		}
 		int declarationastcount = declarationasts.size();
 				
-		int symbolcount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Symbol));
+		int symbolcount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Symbol));
 		
 		PrintWriter writer = new PrintWriter("counts", "UTF-8");
 		writer.println("Package count: " + packagecount);
@@ -107,13 +111,12 @@ public class Main {
 	public static void plotPackages(GraphDatabaseService graphDb)
 			throws IOException {
 
-		Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Labels.Package);
+		Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package);
 		long attemptedpackages = 0;
 		long successfulpackages = 0;
 		for (Node packagenode : packagenodes) {
 			attemptedpackages += 1;
-			if (packagenode.hasRelationship(Direction.OUTGOING,
-					RelationshipTypes.DECLARATION)) {
+			if (packagenode.hasRelationship(OUTGOING,DECLARATION)) {
 				successfulpackages += 1;
 			}
 		}
@@ -156,11 +159,11 @@ public class Main {
 		TreeMap<Long,Integer> mentionmap = new TreeMap<Long,Integer>();
 		
 		Iterable<Node> symbolnodes = GlobalGraphOperations.at(graphDb)
-				.getAllNodesWithLabel(Labels.Symbol);
+				.getAllNodesWithLabel(Symbol);
 		
 		for(Node symbolnode : symbolnodes){
 			
-			Iterable<Node> mentioningnodes = new Hop(Direction.INCOMING,RelationshipTypes.MENTIONEDSYMBOL).apply(symbolnode);
+			Iterable<Node> mentioningnodes = new Hop(INCOMING,MENTIONEDSYMBOL).apply(symbolnode);
 			mentionmap.put(symbolnode.getId(), Iterables.size(mentioningnodes));
 			
 		}
@@ -224,8 +227,7 @@ public class Main {
 		
 			TreeMap<Long,Integer> declarationsmap = new TreeMap<Long,Integer>();
 			
-			Iterable<Node> symbolnodes = GlobalGraphOperations.at(graphDb)
-					.getAllNodesWithLabel(Labels.Symbol);
+			Iterable<Node> symbolnodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Symbol);
 			
 			for(Node symbolnode : symbolnodes){
 				
@@ -249,7 +251,7 @@ public class Main {
 		Collection<Pair<String, String>> declarationastpairs = new LinkedList<Pair<String, String>>();
 
 		Iterable<Node> symbolnodes = GlobalGraphOperations.at(graphDb)
-				.getAllNodesWithLabel(Labels.Symbol);
+				.getAllNodesWithLabel(Symbol);
 
 		for (Node symbolnode : symbolnodes) {
 
@@ -298,7 +300,7 @@ public class Main {
 					    .transformAndConcat(new Hop(INCOMING,DECLARATION))
 					    .transformAndConcat(new Hop(OUTGOING,DEPENDENCY));
 				
-				Iterable<Node> usedpackagenodes = new Hop(Direction.INCOMING,DECLARATION).apply(useddeclarationnode);
+				Iterable<Node> usedpackagenodes = new Hop(INCOMING,DECLARATION).apply(useddeclarationnode);
 				
 				if(containsAll(dependencynodes,usedpackagenodes)){
 					usages.add(Pair.of(usingdeclarationnode, useddeclarationnode));
@@ -318,4 +320,25 @@ public class Main {
 		return true;
 	}
 
+	private static Iterable<Pair<Node,Node>> updates(GraphDatabaseService graphDb){
+		
+		LinkedList<Pair<Node, Node>> updates = new LinkedList<Pair<Node, Node>>();
+		
+		Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package);
+		
+		for(Node packagenode : packagenodes){
+			
+			Iterable<Node> nextversionnodes = new Hop(OUTGOING,NEXTVERSION).apply(packagenode);
+			
+			for(Node nextversionnode : nextversionnodes){
+				updates.add(Pair.of(packagenode, nextversionnode));
+			}
+			
+		}
+		
+		return updates;
+		
+		
+	}
+	
 }
