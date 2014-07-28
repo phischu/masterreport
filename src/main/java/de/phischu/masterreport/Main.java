@@ -105,7 +105,7 @@ public class Main {
 		writer.println("Declaration count: " + declarationcount);
 		writer.println("Declaration AST count: " + declarationastcount);
 		writer.println("Symbol count: " + symbolcount);
-		writer.println("Forbidden update count: " + forbiddenupdatecount);
+		writer.println("Unnecessarily forbidden update count: " + forbiddenupdatecount);
 		
 		writer.close();
 		
@@ -337,7 +337,41 @@ public class Main {
 					
 					if(Iterables.contains(new Hop(OUTGOING,DEPENDENCY).apply(packagenode),dependencynode2)) continue;
 					
-					updates.add(Pair.of(packagenode, Pair.of(dependencynode1, dependencynode2)));
+					Boolean symbolchanged = false;
+					
+					for(Node usedsymbolnode : FluentIterable
+							.from(Collections.singleton(packagenode))
+							.transformAndConcat(new Hop(OUTGOING,DECLARATION))
+							.transformAndConcat(new Hop(OUTGOING,MENTIONEDSYMBOL))){
+						
+						for(Node originaldeclarationnode : new Hop(INCOMING,DECLAREDSYMBOL).apply(usedsymbolnode)){
+							
+							if(!Iterables.contains(
+									new Hop(INCOMING,DECLARATION).apply(originaldeclarationnode),
+									dependencynode1)) continue;
+							
+							LinkedList<String> updateddeclarationnodeasts = new LinkedList<String>();
+							
+							for(Node updateddeclarationnode : new Hop(INCOMING,DECLAREDSYMBOL).apply(usedsymbolnode)){
+								
+								if(!Iterables.contains(
+										new Hop(INCOMING,DECLARATION).apply(updateddeclarationnode),
+										dependencynode2)) continue;
+								
+								updateddeclarationnodeasts.add((String)updateddeclarationnode.getProperty("declarationast"));
+								
+							}
+							
+							if(!Iterables.contains(
+									updateddeclarationnodeasts,
+									(String) originaldeclarationnode.getProperty("declarationast"))){
+								symbolchanged = true;
+							}
+						}
+					}
+					
+					if(!symbolchanged)
+						updates.add(Pair.of(packagenode,Pair.of(dependencynode1,dependencynode2)));
 					
 				}
 				
