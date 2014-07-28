@@ -98,11 +98,14 @@ public class Main {
 				
 		int symbolcount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Symbol));
 		
+		int forbiddenupdatecount = Iterables.size(unnecessarilyForbiddenUpdates(graphDb));
+		
 		PrintWriter writer = new PrintWriter("counts", "UTF-8");
 		writer.println("Package count: " + packagecount);
 		writer.println("Declaration count: " + declarationcount);
 		writer.println("Declaration AST count: " + declarationastcount);
 		writer.println("Symbol count: " + symbolcount);
+		writer.println("Forbidden update count: " + forbiddenupdatecount);
 		
 		writer.close();
 		
@@ -320,25 +323,30 @@ public class Main {
 		return true;
 	}
 
-	private static Iterable<Pair<Node,Node>> updates(GraphDatabaseService graphDb){
+	private static Iterable<Pair<Node,Pair<Node,Node>>> unnecessarilyForbiddenUpdates(GraphDatabaseService graphDb){
 		
-		LinkedList<Pair<Node, Node>> updates = new LinkedList<Pair<Node, Node>>();
+		LinkedList<Pair<Node,Pair<Node, Node>>> updates = new LinkedList<Pair<Node,Pair<Node, Node>>>();
 		
 		Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package);
 		
 		for(Node packagenode : packagenodes){
 			
-			Iterable<Node> nextversionnodes = new Hop(OUTGOING,NEXTVERSION).apply(packagenode);
-			
-			for(Node nextversionnode : nextversionnodes){
-				updates.add(Pair.of(packagenode, nextversionnode));
+			for(Node dependencynode1 : new Hop(OUTGOING,DEPENDENCY).apply(packagenode)){
+				
+				for(Node dependencynode2 : new Hop(OUTGOING,NEXTVERSION).apply(dependencynode1)){
+					
+					if(Iterables.contains(new Hop(OUTGOING,DEPENDENCY).apply(packagenode),dependencynode2)) continue;
+					
+					updates.add(Pair.of(packagenode, Pair.of(dependencynode1, dependencynode2)));
+					
+				}
+				
 			}
 			
 		}
 		
 		return updates;
 		
-		
 	}
-	
+
 }
