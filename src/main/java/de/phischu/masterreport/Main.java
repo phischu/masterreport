@@ -323,9 +323,9 @@ public class Main {
 		return true;
 	}
 
-	private static Iterable<Pair<Node,Pair<Node,Node>>> unnecessarilyForbiddenUpdates(GraphDatabaseService graphDb){
+	private static Iterable<Update> unnecessarilyForbiddenUpdates(GraphDatabaseService graphDb){
 		
-		LinkedList<Pair<Node,Pair<Node, Node>>> updates = new LinkedList<Pair<Node,Pair<Node, Node>>>();
+		LinkedList<Update> updates = new LinkedList<Update>();
 		
 		Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package);
 		
@@ -370,8 +370,14 @@ public class Main {
 						}
 					}
 					
-					if(!symbolchanged)
-						updates.add(Pair.of(packagenode,Pair.of(dependencynode1,dependencynode2)));
+					updates.add(new Update(
+								(String) packagenode.getProperty("packagename"),
+								(String) packagenode.getProperty("packageversion"),
+								(String) dependencynode1.getProperty("packagename"),
+								(String) dependencynode1.getProperty("packageversion"),
+								(String) dependencynode2.getProperty("packagename"),
+								(String) dependencynode2.getProperty("packageversion"),
+								symbolchanged));
 					
 				}
 				
