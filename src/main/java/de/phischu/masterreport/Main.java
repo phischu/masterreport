@@ -33,7 +33,6 @@ import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.renderer.xy.DefaultXYItemRenderer;
 import org.jfree.data.general.DefaultPieDataset;
 import org.jfree.data.statistics.HistogramDataset;
-import org.neo4j.graphdb.Direction;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.Node;
@@ -98,13 +97,15 @@ public class Main {
 				
 		int symbolcount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Symbol));
 		
-		int forbiddenupdatecount = Iterables.size(unnecessarilyForbiddenUpdates(graphDb));
+		int updatecount = Iterables.size(updates(graphDb));
+		int forbiddenupdatecount = Iterables.size(Iterables.filter(updates(graphDb),x -> x.safe));
 		
 		PrintWriter writer = new PrintWriter("counts", "UTF-8");
 		writer.println("Package count: " + packagecount);
 		writer.println("Declaration count: " + declarationcount);
 		writer.println("Declaration AST count: " + declarationastcount);
 		writer.println("Symbol count: " + symbolcount);
+		writer.println("Update count:" + updatecount);
 		writer.println("Unnecessarily forbidden update count: " + forbiddenupdatecount);
 		
 		writer.close();
@@ -323,7 +324,7 @@ public class Main {
 		return true;
 	}
 
-	private static Iterable<Update> unnecessarilyForbiddenUpdates(GraphDatabaseService graphDb){
+	private static Iterable<Update> updates(GraphDatabaseService graphDb){
 		
 		LinkedList<Update> updates = new LinkedList<Update>();
 		
