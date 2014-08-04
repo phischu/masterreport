@@ -97,8 +97,12 @@ public class Main {
 				
 		int symbolcount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Symbol));
 		
-		int updatecount = Iterables.size(updates(graphDb));
-		int forbiddenupdatecount = Iterables.size(Iterables.filter(updates(graphDb),x -> x.safe));
+		LinkedList<Update> allupdates = Lists.newLinkedList(updates(graphDb));
+		int updatecount = Iterables.size(allupdates);
+		int legalsafeupdatecount = Iterables.size(Iterables.filter(allupdates,x -> x.legal && x.safe));
+		int legalunsafeupdatecount = Iterables.size(Iterables.filter(allupdates,x -> x.legal && !x.safe));
+		int illegalsafeupdatecount = Iterables.size(Iterables.filter(allupdates,x -> !x.legal && x.safe));
+		int illegalunsafeupdatecount = Iterables.size(Iterables.filter(allupdates,x -> !x.legal && !x.safe));
 		
 		PrintWriter writer = new PrintWriter("counts", "UTF-8");
 		writer.println("Package count: " + packagecount);
@@ -106,7 +110,10 @@ public class Main {
 		writer.println("Declaration AST count: " + declarationastcount);
 		writer.println("Symbol count: " + symbolcount);
 		writer.println("Update count:" + updatecount);
-		writer.println("Unnecessarily forbidden update count: " + forbiddenupdatecount);
+		writer.println("Legal safe update count: " + legalsafeupdatecount);
+		writer.println("Legal unsafe update count: " + legalunsafeupdatecount);
+		writer.println("Illegal safe update count: " + illegalsafeupdatecount);
+		writer.println("Illegal unsafe update count: " + illegalunsafeupdatecount);
 		
 		writer.close();
 		
@@ -336,8 +343,6 @@ public class Main {
 				
 				for(Node dependencynode2 : new Hop(OUTGOING,NEXTVERSION).apply(dependencynode1)){
 					
-					if(Iterables.contains(new Hop(OUTGOING,DEPENDENCY).apply(packagenode),dependencynode2)) continue;
-					
 					Boolean symbolchanged = false;
 					
 					for(Node usedsymbolnode : FluentIterable
@@ -371,6 +376,9 @@ public class Main {
 						}
 					}
 					
+					Boolean updatelegal = false;
+					if(Iterables.contains(new Hop(OUTGOING,DEPENDENCY).apply(packagenode),dependencynode2)) updatelegal = true;
+					
 					updates.add(new Update(
 								(String) packagenode.getProperty("packagename"),
 								(String) packagenode.getProperty("packageversion"),
@@ -378,7 +386,8 @@ public class Main {
 								(String) dependencynode1.getProperty("packageversion"),
 								(String) dependencynode2.getProperty("packagename"),
 								(String) dependencynode2.getProperty("packageversion"),
-								symbolchanged));
+								symbolchanged,
+								updatelegal));
 					
 				}
 				

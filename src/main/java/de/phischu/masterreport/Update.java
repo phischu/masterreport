@@ -4,7 +4,8 @@ public class Update {
 	
 	public Update(String packagename, String packageversion,
 			String dependencyname1, String dependencyversion1,
-			String dependencyname2, String dependencyversion2, Boolean safe) {
+			String dependencyname2, String dependencyversion2,
+			Boolean safe, Boolean legal) {
 		super();
 		this.packagename = packagename;
 		this.packageversion = packageversion;
@@ -13,6 +14,7 @@ public class Update {
 		this.dependencyname2 = dependencyname2;
 		this.dependencyversion2 = dependencyversion2;
 		this.safe = safe;
+		this.legal = legal;
 	}
 
 	public String packagename;
@@ -22,5 +24,6 @@ public class Update {
 	public String dependencyname2;
 	public String dependencyversion2;
 	public Boolean safe;
+	public Boolean legal;
 
 }
