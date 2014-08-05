@@ -24,6 +24,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import javax.xml.crypto.dsig.Transform;
+
 import org.jfree.chart.ChartUtilities;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.LogarithmicAxis;
@@ -323,9 +325,9 @@ public class Main {
 
 	}
 
-	private static boolean containsAll(Iterable<Node> nodes1,Iterable<Node> nodes2) {
+	private static boolean containsAll(Iterable<? extends Object> nodes1,Iterable<? extends Object> nodes2) {
 		
-		for(Node node2 : nodes2){
+		for(Object node2 : nodes2){
 			if(!Iterables.contains(nodes1, node2)) return false;
 		}
 		return true;
@@ -350,30 +352,19 @@ public class Main {
 							.transformAndConcat(new Hop(OUTGOING,DECLARATION))
 							.transformAndConcat(new Hop(OUTGOING,MENTIONEDSYMBOL))){
 						
-						for(Node originaldeclarationnode : new Hop(INCOMING,DECLAREDSYMBOL).apply(usedsymbolnode)){
-							
-							if(!Iterables.contains(
-									new Hop(INCOMING,DECLARATION).apply(originaldeclarationnode),
-									dependencynode1)) continue;
-							
-							LinkedList<String> updateddeclarationnodeasts = new LinkedList<String>();
-							
-							for(Node updateddeclarationnode : new Hop(INCOMING,DECLAREDSYMBOL).apply(usedsymbolnode)){
-								
-								if(!Iterables.contains(
-										new Hop(INCOMING,DECLARATION).apply(updateddeclarationnode),
-										dependencynode2)) continue;
-								
-								updateddeclarationnodeasts.add((String)updateddeclarationnode.getProperty("declarationast"));
-								
-							}
-							
-							if(!Iterables.contains(
-									updateddeclarationnodeasts,
-									(String) originaldeclarationnode.getProperty("declarationast"))){
-								symbolchanged = true;
-							}
-						}
+						FluentIterable<Node> declarationnodes = FluentIterable
+						    .from(Collections.singleton(usedsymbolnode))
+							.transformAndConcat(new Hop(INCOMING,DECLAREDSYMBOL));
+						
+						FluentIterable<String> originaldeclarationasts = declarationnodes
+						    .filter(x -> !Iterables.contains(new Hop(INCOMING,DECLARATION).apply(dependencynode1),x))
+						    .transform(x -> (String) x.getProperty("declarationast"));
+						
+						FluentIterable<String> updateddeclarationasts = declarationnodes
+							 .filter(x -> !Iterables.contains(new Hop(INCOMING,DECLARATION).apply(dependencynode2),x))
+							 .transform(x -> (String) x.getProperty("declarationast"));
+						
+						if(containsAll(updateddeclarationasts, originaldeclarationasts)) symbolchanged = false;
 					}
 					
 					Boolean updatelegal = false;
