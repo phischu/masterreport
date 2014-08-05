@@ -357,14 +357,14 @@ public class Main {
 							.transformAndConcat(new Hop(INCOMING,DECLAREDSYMBOL));
 						
 						FluentIterable<String> originaldeclarationasts = declarationnodes
-						    .filter(x -> !Iterables.contains(new Hop(INCOMING,DECLARATION).apply(dependencynode1),x))
+						    .filter(x -> Iterables.contains(new Hop(INCOMING,DECLARATION).apply(dependencynode1),x))
 						    .transform(x -> (String) x.getProperty("declarationast"));
 						
 						FluentIterable<String> updateddeclarationasts = declarationnodes
-							 .filter(x -> !Iterables.contains(new Hop(INCOMING,DECLARATION).apply(dependencynode2),x))
+							 .filter(x -> Iterables.contains(new Hop(INCOMING,DECLARATION).apply(dependencynode2),x))
 							 .transform(x -> (String) x.getProperty("declarationast"));
 						
-						if(containsAll(updateddeclarationasts, originaldeclarationasts)) symbolchanged = false;
+						if(!containsAll(updateddeclarationasts, originaldeclarationasts)) symbolchanged = true;
 					}
 					
 					Boolean updatelegal = false;
