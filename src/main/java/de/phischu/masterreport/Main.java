@@ -24,8 +24,6 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-import javax.xml.crypto.dsig.Transform;
-
 import org.jfree.chart.ChartUtilities;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.LogarithmicAxis;
@@ -47,6 +45,7 @@ import com.google.common.collect.FluentIterable;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.google.gson.Gson;
 
 public class Main {
 
@@ -63,7 +62,11 @@ public class Main {
 		Transaction tx = graphDb.beginTx();
 		try {
 			
-			printCounts(graphDb);
+			LinkedList<Update> updates = Lists.newLinkedList(updates(graphDb));
+
+			saveUpdates(updates);
+			
+			printCounts(graphDb,updates);
 			
 			plotPackages(graphDb);
 			
@@ -84,7 +87,16 @@ public class Main {
 
 	}
 
-	public static void printCounts(GraphDatabaseService graphDb) throws FileNotFoundException, UnsupportedEncodingException {
+	public static void saveUpdates(Iterable<Update> updates) throws FileNotFoundException, UnsupportedEncodingException {
+		
+		Gson gson = new Gson();
+		PrintWriter writer = new PrintWriter("updates.json", "UTF-8");
+		writer.print(gson.toJson(updates));
+		writer.close();
+
+	}
+
+	public static void printCounts(GraphDatabaseService graphDb,Iterable<Update> updates) throws FileNotFoundException, UnsupportedEncodingException {
 		
 		int packagecount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package));
 		
@@ -98,13 +110,11 @@ public class Main {
 		int declarationastcount = declarationasts.size();
 				
 		int symbolcount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Symbol));
-		
-		LinkedList<Update> allupdates = Lists.newLinkedList(updates(graphDb));
-		int updatecount = Iterables.size(allupdates);
-		int legalsafeupdatecount = Iterables.size(Iterables.filter(allupdates,x -> x.legal && x.safe));
-		int legalunsafeupdatecount = Iterables.size(Iterables.filter(allupdates,x -> x.legal && !x.safe));
-		int illegalsafeupdatecount = Iterables.size(Iterables.filter(allupdates,x -> !x.legal && x.safe));
-		int illegalunsafeupdatecount = Iterables.size(Iterables.filter(allupdates,x -> !x.legal && !x.safe));
+		int updatecount = Iterables.size(updates);
+		int legalsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> x.legal && !x.symbolchanged));
+		int legalunsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> x.legal && x.symbolchanged));
+		int illegalsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> !x.legal && !x.symbolchanged));
+		int illegalunsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> !x.legal && x.symbolchanged));
 		
 		PrintWriter writer = new PrintWriter("counts", "UTF-8");
 		writer.println("Package count: " + packagecount);
@@ -345,6 +355,8 @@ public class Main {
 				
 				for(Node dependencynode2 : new Hop(OUTGOING,NEXTVERSION).apply(dependencynode1)){
 					
+					Boolean updatelegal = Iterables.contains(new Hop(OUTGOING,DEPENDENCY).apply(packagenode),dependencynode2);
+				
 					Boolean symbolchanged = false;
 					
 					for(Node usedsymbolnode : FluentIterable
@@ -357,18 +369,17 @@ public class Main {
 							.transformAndConcat(new Hop(INCOMING,DECLAREDSYMBOL));
 						
 						FluentIterable<String> originaldeclarationasts = declarationnodes
-						    .filter(x -> Iterables.contains(new Hop(INCOMING,DECLARATION).apply(dependencynode1),x))
+						    .filter(x -> Iterables.contains(new Hop(INCOMING,DECLARATION).apply(x),dependencynode1))
 						    .transform(x -> (String) x.getProperty("declarationast"));
 						
 						FluentIterable<String> updateddeclarationasts = declarationnodes
-							 .filter(x -> Iterables.contains(new Hop(INCOMING,DECLARATION).apply(dependencynode2),x))
+							 .filter(x -> Iterables.contains(new Hop(INCOMING,DECLARATION).apply(x),dependencynode2))
 							 .transform(x -> (String) x.getProperty("declarationast"));
 						
-						if(!containsAll(updateddeclarationasts, originaldeclarationasts)) symbolchanged = true;
+						if(!containsAll(updateddeclarationasts, originaldeclarationasts)) {
+							symbolchanged = true;
+						}
 					}
-					
-					Boolean updatelegal = false;
-					if(Iterables.contains(new Hop(OUTGOING,DEPENDENCY).apply(packagenode),dependencynode2)) updatelegal = true;
 					
 					updates.add(new Update(
 								(String) packagenode.getProperty("packagename"),
