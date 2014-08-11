@@ -89,26 +89,31 @@ public class Main {
 
 	public static void plotUpdates(Iterable<Update> updates) throws IOException {
 		
-		int legalsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> x.legal && !x.symbolchanged));
-		int legalunsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> x.legal && x.symbolchanged));
-		int illegalsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> !x.legal && !x.symbolchanged));
-		int illegalunsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> !x.legal && x.symbolchanged));
+		int updatecount = Iterables.size(updates);
+		int legalupdatecount = Iterables.size(Iterables.filter(updates,x -> x.legal));
+		int safeupdatecount = Iterables.size(Iterables.filter(updates,x -> !x.symbolchanged));
 		
-		DefaultPieDataset dataset = new DefaultPieDataset();
-		dataset.setValue("Legal Safe", legalsafeupdatecount);
-		dataset.setValue("Legal Unsafe", legalunsafeupdatecount);
-		dataset.setValue("Illegal Safe", illegalsafeupdatecount);
-		dataset.setValue("Illegal Unsafe", illegalunsafeupdatecount);
+		DefaultPieDataset legalupdatedataset = new DefaultPieDataset();
+		legalupdatedataset.setValue("Legal", legalupdatecount);
+		legalupdatedataset.setValue("Illegal", updatecount - legalupdatecount);
+		
+		DefaultPieDataset safeupdatedataset = new DefaultPieDataset();
+		safeupdatedataset.setValue("Safe", safeupdatecount);
+		safeupdatedataset.setValue("Unsafe", updatecount - safeupdatecount);
 
-		PiePlot plot = new PiePlot(dataset);
-		plot.setSectionPaint("Legal Safe", Color.green);
-		plot.setSectionPaint("Legal Unsafe", Color.orange);
-		plot.setSectionPaint("Illegal Safe", Color.yellow);
-		plot.setSectionPaint("Illegal Unsafe", Color.red);
+		PiePlot legalupdateplot = new PiePlot(legalupdatedataset);
+		legalupdateplot.setSectionPaint("Legal", Color.green);
+		legalupdateplot.setSectionPaint("Illegal", Color.red);
+		
+		PiePlot safeupdateplot = new PiePlot(safeupdatedataset);
+		safeupdateplot.setSectionPaint("Safe", Color.green);
+		safeupdateplot.setSectionPaint("Unsafe", Color.red);
 
-		JFreeChart chart = new JFreeChart(plot);
+		JFreeChart legalupdatechart = new JFreeChart(legalupdateplot);
+		JFreeChart safeupdatechart = new JFreeChart(safeupdateplot);
 
-		ChartUtilities.saveChartAsPNG(new File("updates.png"), chart, 1024, 768);
+		ChartUtilities.saveChartAsPNG(new File("legalupdates.png"), legalupdatechart, 1024, 768);
+		ChartUtilities.saveChartAsPNG(new File("safeupdates.png"), safeupdatechart, 1024, 768);
 
 	}
 
