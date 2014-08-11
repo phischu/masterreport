@@ -64,7 +64,7 @@ public class Main {
 			
 			LinkedList<Update> updates = Lists.newLinkedList(updates(graphDb));
 
-			saveUpdates(updates);
+			plotUpdates(updates);
 			
 			printCounts(graphDb,updates);
 			
@@ -87,12 +87,28 @@ public class Main {
 
 	}
 
-	public static void saveUpdates(Iterable<Update> updates) throws FileNotFoundException, UnsupportedEncodingException {
+	public static void plotUpdates(Iterable<Update> updates) throws IOException {
 		
-		Gson gson = new Gson();
-		PrintWriter writer = new PrintWriter("updates.json", "UTF-8");
-		writer.print(gson.toJson(updates));
-		writer.close();
+		int legalsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> x.legal && !x.symbolchanged));
+		int legalunsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> x.legal && x.symbolchanged));
+		int illegalsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> !x.legal && !x.symbolchanged));
+		int illegalunsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> !x.legal && x.symbolchanged));
+		
+		DefaultPieDataset dataset = new DefaultPieDataset();
+		dataset.setValue("Legal Safe", legalsafeupdatecount);
+		dataset.setValue("Legal Unsafe", legalunsafeupdatecount);
+		dataset.setValue("Illegal Safe", illegalsafeupdatecount);
+		dataset.setValue("Illegal Unsafe", illegalunsafeupdatecount);
+
+		PiePlot plot = new PiePlot(dataset);
+		plot.setSectionPaint("Legal Safe", Color.green);
+		plot.setSectionPaint("Legal Unsafe", Color.orange);
+		plot.setSectionPaint("Illegal Safe", Color.yellow);
+		plot.setSectionPaint("Illegal Unsafe", Color.red);
+
+		JFreeChart chart = new JFreeChart(plot);
+
+		ChartUtilities.saveChartAsPNG(new File("updates.png"), chart, 1024, 768);
 
 	}
 
