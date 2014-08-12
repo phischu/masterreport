@@ -76,6 +76,9 @@ public class Main {
 			
 			System.out.println("Printing Refactorings...");
 			printRefactorings(Sets.newHashSet(refactorings(graphDb)));
+			
+			System.out.println("Trying to install Updates...");
+			LinkedList<Update> installedupdates = installUpdates(updates);
 
 			tx.success();
 		} finally {
@@ -86,6 +89,19 @@ public class Main {
 
 		System.out.println("done");
 
+	}
+
+	public static LinkedList<Update> installUpdates(LinkedList<Update> updates) {
+		
+		LinkedList<Update> installedUpdates = new LinkedList<Update>();
+		for(Update update : updates){
+			Update installedUpdate = update;
+			ProcessBuilder installationProcess = new ProcessBuilder("cabal","install");
+			installedUpdate.installs = false;
+			installedUpdates.add(installedUpdate);
+		}
+		return installedUpdates;
+		
 	}
 
 	public static void saveUpdates(LinkedList<Update> updates) throws FileNotFoundException, UnsupportedEncodingException {
