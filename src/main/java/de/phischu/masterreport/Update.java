@@ -15,7 +15,6 @@ public class Update {
 		this.dependencyversion2 = dependencyversion2;
 		this.symbolchanged = symbolchanged;
 		this.legal = legal;
-		this.installs = false;
 	}
 
 	public String packagename;
@@ -26,6 +25,5 @@ public class Update {
 	public String dependencyversion2;
 	public Boolean symbolchanged;
 	public Boolean legal;
-	public Boolean installs;
 
 }

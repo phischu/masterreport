@@ -84,12 +84,13 @@ public class Main {
 			int symbolcount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Symbol));
 			
 			int updatecount = Iterables.size(updates);
-			int legalupdatecount = Iterables.size(Iterables.filter(updates,x -> x.legal));
-			int safeupdatecount = Iterables.size(Iterables.filter(updates,x -> !x.symbolchanged));
 			int legalsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> x.legal && !x.symbolchanged));
 			int legalunsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> x.legal && x.symbolchanged));
 			int illegalsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> !x.legal && !x.symbolchanged));
-			int illegalunsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> !x.legal && x.symbolchanged));
+			
+			Iterable<Update> illegalUnsafe = Iterables.filter(updates,x -> !x.legal && x.symbolchanged);
+			int illegalunsafeupdatecount = Iterables.size(illegalUnsafe);
+			Iterable<Boolean> illegalUnsafeYetInstallable = Iterables.transform(illegalUnsafe,x -> installable(x));
 			
 			PrintWriter writer = new PrintWriter("counts", "UTF-8");
 			writer.println("Package count: " + packagecount);
@@ -106,8 +107,9 @@ public class Main {
 			
 			System.out.println("Plotting ...");
 
-			plotBinary("legalupdates.png","Legal",legalupdatecount,"Illegal",updatecount - legalupdatecount);
-			plotBinary("safeupdates.png","Safe",safeupdatecount,"Unsafe",updatecount - safeupdatecount);
+			plotBinary("legalupdates.png","Legal","Illegal",Iterables.transform(updates, x -> x.legal));
+			plotBinary("safeupdates.png","Safe","Unsafe",Iterables.transform(updates, x -> x.symbolchanged));
+			plotBinary("illegalUnsafeYetInstallable.png", "Illegal Unsafe Installable", "Illegal Unsafe Installable", illegalUnsafeYetInstallable);
 
 			DefaultPieDataset dataset = new DefaultPieDataset();
 			dataset.setValue("All packages", hackagecount - attemptedpackages);
@@ -137,11 +139,11 @@ public class Main {
 
 	}
 
-	public static void plotBinary(String outputpath, String name1, int count1, String name2, int count2) throws IOException {
+	public static void plotBinary(String outputpath, String name1, String name2, Iterable<Boolean> data) throws IOException {
 		
 		DefaultPieDataset dataset = new DefaultPieDataset();
-		dataset.setValue(name1, count1);
-		dataset.setValue(name2, count2);
+		dataset.setValue(name1, Iterables.frequency(data, true));
+		dataset.setValue(name2, Iterables.frequency(data, false));
 
 		PiePlot plot = new PiePlot(dataset);
 		plot.setSectionPaint(name1, Color.green);
@@ -152,35 +154,26 @@ public class Main {
 		
 	}
 
-	public static LinkedList<Update> installUpdates(LinkedList<Update> updates) {
-		
-		LinkedList<Update> installedUpdates = new LinkedList<Update>();
-		for(Update update : updates){
-			Update installedUpdate = update;
-			System.out.println("Trying to install: ");
-			System.out.println(update.packagename + "-" + update.packageversion);
-			System.out.println("with");
-			System.out.println("--contraint=\"" + update.dependencyname2 + "==" + update.dependencyversion2+"\"");
-			try {
-				systemCall("cabal","sandbox","init");
-				systemCall("cabal","sandbox","delete");
-				Integer exitcode = systemCall("cabal","install",
-						"--allow-newer=" + update.dependencyname2,
-						"--contraint=\"" + update.dependencyname2 + "==" + update.dependencyversion2+"\"",
-						update.packagename + "-" + update.packageversion);
-				installedUpdate.installs = exitcode == 0;
-			} catch (InterruptedException | IOException e) {
-				e.printStackTrace();
-			}
-			if(installedUpdate.installs){
-				System.out.println("success");
-			}else{
-				System.out.println("fail");
-			}
-			installedUpdates.add(installedUpdate);
+	public static Boolean installable(Update update) {
+
+		System.out.println("Trying to install: ");
+		System.out.println(update.packagename + "-" + update.packageversion);
+		System.out.println("with");
+		System.out.println("--contraint=\"" + update.dependencyname2 + "=="
+				+ update.dependencyversion2 + "\"");
+		try {
+			systemCall("cabal", "sandbox", "init");
+			systemCall("cabal", "sandbox", "delete");
+			Integer exitcode = systemCall("cabal", "install", "--allow-newer="
+					+ update.dependencyname2, "--contraint=\""
+					+ update.dependencyname2 + "==" + update.dependencyversion2
+					+ "\"", update.packagename + "-" + update.packageversion);
+			System.out.println(exitcode);
+			return exitcode == 0;
+		} catch (InterruptedException | IOException e) {
+			e.printStackTrace();
+			return false;
 		}
-		return installedUpdates;
-		
 	}
 	
 	public static int systemCall(String ... command) throws InterruptedException, IOException{
