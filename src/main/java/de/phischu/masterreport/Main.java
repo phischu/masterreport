@@ -1,5 +1,8 @@
 package de.phischu.masterreport;
 
+import static de.phischu.masterreport.Main.Labels.Declaration;
+import static de.phischu.masterreport.Main.Labels.Package;
+import static de.phischu.masterreport.Main.Labels.Symbol;
 import static de.phischu.masterreport.RelationshipTypes.DECLARATION;
 import static de.phischu.masterreport.RelationshipTypes.DECLAREDSYMBOL;
 import static de.phischu.masterreport.RelationshipTypes.DEPENDENCY;
@@ -7,9 +10,6 @@ import static de.phischu.masterreport.RelationshipTypes.MENTIONEDSYMBOL;
 import static de.phischu.masterreport.RelationshipTypes.NEXTVERSION;
 import static org.neo4j.graphdb.Direction.INCOMING;
 import static org.neo4j.graphdb.Direction.OUTGOING;
-import static de.phischu.masterreport.Main.Labels.Package;
-import static de.phischu.masterreport.Main.Labels.Declaration;
-import static de.phischu.masterreport.Main.Labels.Symbol;
 
 import java.awt.Color;
 import java.io.File;
@@ -20,19 +20,12 @@ import java.io.UnsupportedEncodingException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
-import java.util.Map;
-import java.util.TreeMap;
 import java.util.TreeSet;
 
 import org.jfree.chart.ChartUtilities;
 import org.jfree.chart.JFreeChart;
-import org.jfree.chart.axis.LogarithmicAxis;
-import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.plot.PiePlot;
-import org.jfree.chart.plot.XYPlot;
-import org.jfree.chart.renderer.xy.DefaultXYItemRenderer;
 import org.jfree.data.general.DefaultPieDataset;
-import org.jfree.data.statistics.HistogramDataset;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.Node;
@@ -45,7 +38,6 @@ import com.google.common.collect.FluentIterable;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.google.gson.Gson;
 
 public class Main {
 
@@ -62,23 +54,77 @@ public class Main {
 		Transaction tx = graphDb.beginTx();
 		try {
 			
-			System.out.println("Fetching Updates...");
+			System.out.println("Analysing Updates...");
+			
 			LinkedList<Update> updates = Lists.newLinkedList(updates(graphDb));
+			
+			System.out.println("Counting ...");
+			
+			int hackagecount = 40160;
+			Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package);
+			int packagecount = Iterables.size(packagenodes);
+			int attemptedpackages = 0;
+			int successfulpackages = 0;
+			for (Node packagenode : packagenodes) {
+				attemptedpackages += 1;
+				if (packagenode.hasRelationship(OUTGOING,DECLARATION)) {
+					successfulpackages += 1;
+				}
+			}
+			
+		    Iterable<Node> declarationnodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Declaration);
+			int declarationcount = Iterables.size(declarationnodes);
+			
+			TreeSet<String> declarationasts = new TreeSet<String>();
+			for(Node declarationnode : declarationnodes){
+				declarationasts.add((String) declarationnode.getProperty("declarationast"));
+			}
+			int declarationastcount = declarationasts.size();
+			
+			int symbolcount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Symbol));
+			
+			int updatecount = Iterables.size(updates);
+			int legalupdatecount = Iterables.size(Iterables.filter(updates,x -> x.legal));
+			int safeupdatecount = Iterables.size(Iterables.filter(updates,x -> !x.symbolchanged));
+			int legalsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> x.legal && !x.symbolchanged));
+			int legalunsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> x.legal && x.symbolchanged));
+			int illegalsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> !x.legal && !x.symbolchanged));
+			int illegalunsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> !x.legal && x.symbolchanged));
+			
+			PrintWriter writer = new PrintWriter("counts", "UTF-8");
+			writer.println("Package count: " + packagecount);
+			writer.println("Declaration count: " + declarationcount);
+			writer.println("Declaration AST count: " + declarationastcount);
+			writer.println("Symbol count: " + symbolcount);
+			writer.println("Update count:" + updatecount);
+			writer.println("Legal safe update count: " + legalsafeupdatecount);
+			writer.println("Legal unsafe update count: " + legalunsafeupdatecount);
+			writer.println("Illegal safe update count: " + illegalsafeupdatecount);
+			writer.println("Illegal unsafe update count: " + illegalunsafeupdatecount);
+			
+			writer.close();
+			
+			System.out.println("Plotting ...");
 
-			System.out.println("Plotting Updates...");
-			plotUpdates(updates);
-			
-			System.out.println("Printing Counts...");
-			printCounts(graphDb,updates);
-			
-			System.out.println("Plotting Packages...");
-			plotPackages(graphDb);
+			plotBinary("legalupdates.png","Legal",legalupdatecount,"Illegal",updatecount - legalupdatecount);
+			plotBinary("safeupdates.ong","Safe",safeupdatecount,"Unsafe",updatecount - safeupdatecount);
+
+			DefaultPieDataset dataset = new DefaultPieDataset();
+			dataset.setValue("All packages", hackagecount - attemptedpackages);
+			dataset.setValue("Attempted packages", attemptedpackages - successfulpackages);
+			dataset.setValue("Successful packages", successfulpackages);
+
+			PiePlot plot = new PiePlot(dataset);
+			plot.setSectionPaint("All packages", Color.gray);
+			plot.setSectionPaint("Attempted packages", Color.red);
+			plot.setSectionPaint("Successful packages", Color.green);
+
+			JFreeChart chart = new JFreeChart(plot);
+
+			ChartUtilities.saveChartAsPNG(new File("hackage.png"), chart, 1024, 768);
 			
 			System.out.println("Printing Refactorings...");
 			printRefactorings(Sets.newHashSet(refactorings(graphDb)));
-			
-			System.out.println("Trying to install Updates...");
-			LinkedList<Update> installedupdates = installUpdates(updates);
 
 			tx.success();
 		} finally {
@@ -89,6 +135,21 @@ public class Main {
 
 		System.out.println("done");
 
+	}
+
+	public static void plotBinary(String outputpath, String name1, int count1, String name2, int count2) throws IOException {
+		
+		DefaultPieDataset dataset = new DefaultPieDataset();
+		dataset.setValue(name1, count1);
+		dataset.setValue(name2, count2);
+
+		PiePlot plot = new PiePlot(dataset);
+		plot.setSectionPaint(name1, Color.green);
+		plot.setSectionPaint(name2, Color.red);
+
+		JFreeChart chart = new JFreeChart(plot);
+		ChartUtilities.saveChartAsPNG(new File(outputpath), chart, 1024, 768);
+		
 	}
 
 	public static LinkedList<Update> installUpdates(LinkedList<Update> updates) {
@@ -111,6 +172,11 @@ public class Main {
 			} catch (InterruptedException | IOException e) {
 				e.printStackTrace();
 			}
+			if(installedUpdate.installs){
+				System.out.println("success");
+			}else{
+				System.out.println("fail");
+			}
 			installedUpdates.add(installedUpdate);
 		}
 		return installedUpdates;
@@ -122,111 +188,6 @@ public class Main {
 		ProcessBuilder processbuilder = new ProcessBuilder(command);
 		return processbuilder.start().waitFor();
 		
-	}
-
-	public static void saveUpdates(LinkedList<Update> updates) throws FileNotFoundException, UnsupportedEncodingException {
-		
-		Gson gson = new Gson();
-		PrintWriter writer = new PrintWriter("updates.json", "UTF-8");
-		writer.print(gson.toJson(Iterables.filter(updates, x -> !(x.legal && !x.symbolchanged))));
-		writer.close();
-	}
-
-	public static void plotUpdates(Iterable<Update> updates) throws IOException {
-		
-		int updatecount = Iterables.size(updates);
-		int legalupdatecount = Iterables.size(Iterables.filter(updates,x -> x.legal));
-		int safeupdatecount = Iterables.size(Iterables.filter(updates,x -> !x.symbolchanged));
-		
-		DefaultPieDataset legalupdatedataset = new DefaultPieDataset();
-		legalupdatedataset.setValue("Legal", legalupdatecount);
-		legalupdatedataset.setValue("Illegal", updatecount - legalupdatecount);
-		
-		DefaultPieDataset safeupdatedataset = new DefaultPieDataset();
-		safeupdatedataset.setValue("Safe", safeupdatecount);
-		safeupdatedataset.setValue("Unsafe", updatecount - safeupdatecount);
-
-		PiePlot legalupdateplot = new PiePlot(legalupdatedataset);
-		legalupdateplot.setSectionPaint("Legal", Color.green);
-		legalupdateplot.setSectionPaint("Illegal", Color.red);
-		
-		PiePlot safeupdateplot = new PiePlot(safeupdatedataset);
-		safeupdateplot.setSectionPaint("Safe", Color.green);
-		safeupdateplot.setSectionPaint("Unsafe", Color.red);
-
-		JFreeChart legalupdatechart = new JFreeChart(legalupdateplot);
-		JFreeChart safeupdatechart = new JFreeChart(safeupdateplot);
-
-		ChartUtilities.saveChartAsPNG(new File("legalupdates.png"), legalupdatechart, 1024, 768);
-		ChartUtilities.saveChartAsPNG(new File("safeupdates.png"), safeupdatechart, 1024, 768);
-
-	}
-
-	public static void printCounts(GraphDatabaseService graphDb,Iterable<Update> updates) throws FileNotFoundException, UnsupportedEncodingException {
-		
-		int packagecount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package));
-		
-	    Iterable<Node> declarationnodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Declaration);
-		int declarationcount = Iterables.size(declarationnodes);
-		
-		TreeSet<String> declarationasts = new TreeSet<String>();
-		for(Node declarationnode : declarationnodes){
-			declarationasts.add((String) declarationnode.getProperty("declarationast"));
-		}
-		int declarationastcount = declarationasts.size();
-				
-		int symbolcount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Symbol));
-		int updatecount = Iterables.size(updates);
-		int legalsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> x.legal && !x.symbolchanged));
-		int legalunsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> x.legal && x.symbolchanged));
-		int illegalsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> !x.legal && !x.symbolchanged));
-		int illegalunsafeupdatecount = Iterables.size(Iterables.filter(updates,x -> !x.legal && x.symbolchanged));
-		
-		PrintWriter writer = new PrintWriter("counts", "UTF-8");
-		writer.println("Package count: " + packagecount);
-		writer.println("Declaration count: " + declarationcount);
-		writer.println("Declaration AST count: " + declarationastcount);
-		writer.println("Symbol count: " + symbolcount);
-		writer.println("Update count:" + updatecount);
-		writer.println("Legal safe update count: " + legalsafeupdatecount);
-		writer.println("Legal unsafe update count: " + legalunsafeupdatecount);
-		writer.println("Illegal safe update count: " + illegalsafeupdatecount);
-		writer.println("Illegal unsafe update count: " + illegalunsafeupdatecount);
-		
-		writer.close();
-		
-	}
-
-	public static void plotPackages(GraphDatabaseService graphDb)
-			throws IOException {
-
-		Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package);
-		long attemptedpackages = 0;
-		long successfulpackages = 0;
-		for (Node packagenode : packagenodes) {
-			attemptedpackages += 1;
-			if (packagenode.hasRelationship(OUTGOING,DECLARATION)) {
-				successfulpackages += 1;
-			}
-		}
-
-		long allpackages = 40160;
-
-		DefaultPieDataset dataset = new DefaultPieDataset();
-		dataset.setValue("All packages", allpackages - attemptedpackages);
-		dataset.setValue("Attempted packages", attemptedpackages
-				- successfulpackages);
-		dataset.setValue("Successful packages", successfulpackages);
-
-		PiePlot plot = new PiePlot(dataset);
-		plot.setSectionPaint("All packages", Color.gray);
-		plot.setSectionPaint("Attempted packages", Color.red);
-		plot.setSectionPaint("Successful packages", Color.green);
-
-		JFreeChart chart = new JFreeChart(plot);
-
-		ChartUtilities.saveChartAsPNG(new File("hackage.png"), chart, 1024, 768);
-
 	}
 	
 	public static void printRefactorings(Collection<Pair<String,String>> astpairs) throws FileNotFoundException, UnsupportedEncodingException{
@@ -242,105 +203,12 @@ public class Main {
 		writer.close();
 		
 	}
-	
-	public static Map<Long,Integer> mention(GraphDatabaseService graphDb){
-		
-		TreeMap<Long,Integer> mentionmap = new TreeMap<Long,Integer>();
-		
-		Iterable<Node> symbolnodes = GlobalGraphOperations.at(graphDb)
-				.getAllNodesWithLabel(Symbol);
-		
-		for(Node symbolnode : symbolnodes){
-			
-			Iterable<Node> mentioningnodes = new Hop(INCOMING,MENTIONEDSYMBOL).apply(symbolnode);
-			mentionmap.put(symbolnode.getId(), Iterables.size(mentioningnodes));
-			
-		}
-		
-		return mentionmap;
-		
-	}
-	
-	public static void plotMentionHistogram(GraphDatabaseService graphDb) throws IOException{
-		
-		HistogramDataset dataset = new HistogramDataset();
-		dataset.addSeries("", toDoubles(mention(graphDb).values()), 10);		
-		
-		LogarithmicAxis rangeaxis = new LogarithmicAxis("Number of Number of mentions");
-		rangeaxis.setAllowNegativesFlag(true);
-		
-		XYPlot plot = new XYPlot(
-				dataset,
-				new NumberAxis("ln(Number of Mentions)"),
-				rangeaxis,
-				new DefaultXYItemRenderer());
-		
-		JFreeChart chart = new JFreeChart(plot);
 
-		ChartUtilities.saveChartAsPNG(new File("mentionhistogram.png"), chart, 1024, 768);
-		
-	}
-
-	private static double[] toDoubles(Collection<Integer> mentions) {
-		double[] mentionarray = new double[mentions.size()];
-		
-		int i = 0;
-		for(Integer m : mentions){
-			
-			mentionarray[i] = Math.log(m+1);
-			i++;
-			
-		}
-		return mentionarray;
-	}
-	
-	public static void plotDeclarationsHistogram(GraphDatabaseService graphDb) throws IOException{
-		
-		HistogramDataset dataset = new HistogramDataset();
-		dataset.addSeries("", toDoubles(differentASTs(graphDb).values()), 160);	
-		
-		NumberAxis domainaxis = new NumberAxis();
-		
-		LogarithmicAxis rangeaxis = new LogarithmicAxis("Number of Number of Declarations");
-		rangeaxis.setAllowNegativesFlag(true);
-		
-		XYPlot plot = new XYPlot(dataset, domainaxis, rangeaxis, new DefaultXYItemRenderer());
-		
-		JFreeChart chart = new JFreeChart(plot);
-
-		ChartUtilities.saveChartAsPNG(new File("declarationhistogram.png"), chart, 1024, 768);
-		
-	}
-
-	private static Map<Long,Integer> differentASTs(GraphDatabaseService graphDb) {
-		
-			TreeMap<Long,Integer> declarationsmap = new TreeMap<Long,Integer>();
-			
-			Iterable<Node> symbolnodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Symbol);
-			
-			for(Node symbolnode : symbolnodes){
-				
-				Iterable<Node> declaringnodes = new Hop(INCOMING,DECLAREDSYMBOL).apply(symbolnode);
-				
-				TreeSet<String> declaringasts = new TreeSet<String>();
-				for(Node declaringnode : declaringnodes){
-					declaringasts.add((String) declaringnode.getProperty("declarationast"));
-				}
-				
-				declarationsmap.put(symbolnode.getId(), declaringasts.size());
-				
-			}
-			
-			return declarationsmap;
-	}
-
-	public static Collection<Pair<String, String>> refactorings(
-			GraphDatabaseService graphDb) {
+	public static Collection<Pair<String, String>> refactorings(GraphDatabaseService graphDb) {
 
 		Collection<Pair<String, String>> declarationastpairs = new LinkedList<Pair<String, String>>();
 
-		Iterable<Node> symbolnodes = GlobalGraphOperations.at(graphDb)
-				.getAllNodesWithLabel(Symbol);
+		Iterable<Node> symbolnodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Symbol);
 
 		for (Node symbolnode : symbolnodes) {
 
@@ -362,10 +230,8 @@ public class Main {
 							&& !usedast1.equals(usedast2)) {
 						declarationastpairs.add(Pair.of(usedast1, usedast2));
 					}
-
 				}
 			}
-
 		}
 
 		return declarationastpairs;
