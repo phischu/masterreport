@@ -66,6 +66,8 @@ public class Main {
 
 			plotUpdates(updates);
 			
+			saveUpdates(updates);
+			
 			printCounts(graphDb,updates);
 			
 			plotPackages(graphDb);
@@ -85,6 +87,14 @@ public class Main {
 
 		System.out.println("done");
 
+	}
+
+	public static void saveUpdates(LinkedList<Update> updates) throws FileNotFoundException, UnsupportedEncodingException {
+		
+		Gson gson = new Gson();
+		PrintWriter writer = new PrintWriter("updates.json", "UTF-8");
+		writer.print(gson.toJson(Iterables.filter(updates, x -> !(x.legal && !x.symbolchanged))));
+		writer.close();
 	}
 
 	public static void plotUpdates(Iterable<Update> updates) throws IOException {
