@@ -62,20 +62,19 @@ public class Main {
 		Transaction tx = graphDb.beginTx();
 		try {
 			
+			System.out.println("Fetching Updates...");
 			LinkedList<Update> updates = Lists.newLinkedList(updates(graphDb));
 
+			System.out.println("Plotting Updates...");
 			plotUpdates(updates);
 			
-			saveUpdates(updates);
-			
+			System.out.println("Printing Counts...");
 			printCounts(graphDb,updates);
 			
+			System.out.println("Plotting Packages...");
 			plotPackages(graphDb);
 			
-			plotMentionHistogram(graphDb);
-			
-			plotDeclarationsHistogram(graphDb);
-			
+			System.out.println("Printing Refactorings...");
 			printRefactorings(Sets.newHashSet(refactorings(graphDb)));
 
 			tx.success();
