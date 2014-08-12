@@ -107,7 +107,7 @@ public class Main {
 			System.out.println("Plotting ...");
 
 			plotBinary("legalupdates.png","Legal",legalupdatecount,"Illegal",updatecount - legalupdatecount);
-			plotBinary("safeupdates.ong","Safe",safeupdatecount,"Unsafe",updatecount - safeupdatecount);
+			plotBinary("safeupdates.png","Safe",safeupdatecount,"Unsafe",updatecount - safeupdatecount);
 
 			DefaultPieDataset dataset = new DefaultPieDataset();
 			dataset.setValue("All packages", hackagecount - attemptedpackages);
