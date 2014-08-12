@@ -108,7 +108,7 @@ public class Main {
 			System.out.println("Plotting ...");
 
 			plotBinary("legalupdates.png","Legal","Illegal",Iterables.transform(updates, x -> x.legal));
-			plotBinary("safeupdates.png","Safe","Unsafe",Iterables.transform(updates, x -> x.symbolchanged));
+			plotBinary("safeupdates.png","Safe","Unsafe",Iterables.transform(updates, x -> !x.symbolchanged));
 			plotBinary("illegalUnsafeYetInstallable.png", "Illegal Unsafe Installable", "Illegal Unsafe Installable", illegalUnsafeYetInstallable);
 
 			DefaultPieDataset dataset = new DefaultPieDataset();
