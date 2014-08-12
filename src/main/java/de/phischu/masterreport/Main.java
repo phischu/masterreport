@@ -96,11 +96,31 @@ public class Main {
 		LinkedList<Update> installedUpdates = new LinkedList<Update>();
 		for(Update update : updates){
 			Update installedUpdate = update;
-			ProcessBuilder installationProcess = new ProcessBuilder("cabal","install");
-			installedUpdate.installs = false;
+			System.out.println("Trying to install: ");
+			System.out.println(update.packagename + "-" + update.packageversion);
+			System.out.println("with");
+			System.out.println("--contraint=\"" + update.dependencyname2 + "==" + update.dependencyversion2+"\"");
+			try {
+				systemCall("cabal","sandbox","init");
+				systemCall("cabal","sandbox","delete");
+				Integer exitcode = systemCall("cabal","install",
+						"--allow-newer=" + update.dependencyname2,
+						"--contraint=\"" + update.dependencyname2 + "==" + update.dependencyversion2+"\"",
+						update.packagename + "-" + update.packageversion);
+				installedUpdate.installs = exitcode == 0;
+			} catch (InterruptedException | IOException e) {
+				e.printStackTrace();
+			}
 			installedUpdates.add(installedUpdate);
 		}
 		return installedUpdates;
+		
+	}
+	
+	public static int systemCall(String ... command) throws InterruptedException, IOException{
+		
+		ProcessBuilder processbuilder = new ProcessBuilder(command);
+		return processbuilder.start().waitFor();
 		
 	}
 
