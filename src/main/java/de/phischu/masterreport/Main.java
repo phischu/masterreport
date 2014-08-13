@@ -38,6 +38,7 @@ import com.google.common.collect.FluentIterable;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.google.common.io.ByteStreams;
 
 public class Main {
 
@@ -105,6 +106,9 @@ public class Main {
 			
 			writer.close();
 			
+			System.out.println("Printing Refactorings...");
+			printRefactorings(Sets.newHashSet(refactorings(graphDb)));
+			
 			System.out.println("Plotting ...");
 
 			plotBinary("legalupdates.png","Legal","Illegal",Iterables.transform(updates, x -> x.legal));
@@ -124,9 +128,6 @@ public class Main {
 			JFreeChart chart = new JFreeChart(plot);
 
 			ChartUtilities.saveChartAsPNG(new File("hackage.png"), chart, 1024, 768);
-			
-			System.out.println("Printing Refactorings...");
-			printRefactorings(Sets.newHashSet(refactorings(graphDb)));
 
 			tx.success();
 		} finally {
@@ -159,15 +160,13 @@ public class Main {
 		System.out.println("Trying to install: ");
 		System.out.println(update.packagename + "-" + update.packageversion);
 		System.out.println("with");
-		System.out.println("--contraint=\"" + update.dependencyname2 + "=="
-				+ update.dependencyversion2 + "\"");
+		System.out.println("--constraint=\"" + update.dependencyname2 + "==" + update.dependencyversion2 + "\"");
 		try {
-			systemCall("cabal", "sandbox", "init");
-			systemCall("cabal", "sandbox", "delete");
-			Integer exitcode = systemCall("cabal", "install", "--allow-newer="
-					+ update.dependencyname2, "--contraint=\""
-					+ update.dependencyname2 + "==" + update.dependencyversion2
-					+ "\"", update.packagename + "-" + update.packageversion);
+			Integer exitcode = systemCall("cabal",
+					"install","--reinstall","--force-reinstalls",
+					"--allow-newer=" + update.dependencyname2,
+					"--constraint=" + update.dependencyname2 + "==" + update.dependencyversion2,
+					update.packagename + "-" + update.packageversion);
 			System.out.println(exitcode);
 			return exitcode == 0;
 		} catch (InterruptedException | IOException e) {
@@ -179,7 +178,10 @@ public class Main {
 	public static int systemCall(String ... command) throws InterruptedException, IOException{
 		
 		ProcessBuilder processbuilder = new ProcessBuilder(command);
-		return processbuilder.start().waitFor();
+		Process process = processbuilder.start();
+		ByteStreams.copy(process.getInputStream(), System.out);
+		ByteStreams.copy(process.getErrorStream(), System.out);
+		return process.waitFor();
 		
 	}
 	
