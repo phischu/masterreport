@@ -343,76 +343,105 @@ public class Main {
 		// for each declaration
 		for(Node declarationnode : GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Declaration)){
 			
+			generateDeclarationSlices(slices, declarationnode);
+			
+		}
+		
+	}
+	
+	public static List<Slice> generateDeclarationSlices(
+			HashMap<Node, List<Slice>> slices, Node declarationnode) {
+
+		List<Slice> declarationSlices = slices.get(declarationnode);
+
+		if (declarationSlices == null) {
+
 			// for each symbol the set of slices that might be used
 			List<Set<Slice>> choicePoints = Collections.emptyList();
-			
+
 			// for each symbol
-			for(Node symbolnode : new Hop(OUTGOING,MENTIONEDSYMBOL).apply(declarationnode)){
-				
-				// declarations declaring this symbol TODO: and are a valid dependency
-				Iterable<Node> usedDeclarations = new Hop(INCOMING,DECLAREDSYMBOL).apply(symbolnode);
-				
-				// if there is nor declaration for this symbol it is primitive (probably from base)
-				if(Iterables.isEmpty(usedDeclarations)){
-					
-					// create a primitive slice for this symbol TODO: properly recover and hash the symbol
-					Slice primitiveSlice = new Slice(
-							new Integer(Objects.hash(symbolnode)),
-							Collections.<Integer>emptySet(),
-							Collections.<Symbol,Integer>emptyMap());
-					
-					// add this single choice for this symbol to the list of choices
+			for (Node symbolnode : new Hop(OUTGOING, MENTIONEDSYMBOL)
+					.apply(declarationnode)) {
+
+				// declarations declaring this symbol TODO: and are a valid
+				// dependency
+				Iterable<Node> usedDeclarations = new Hop(INCOMING,
+						DECLAREDSYMBOL).apply(symbolnode);
+
+				// if there is nor declaration for this symbol it is primitive
+				// (probably from base)
+				if (Iterables.isEmpty(usedDeclarations)) {
+
+					// create a primitive slice for this symbol TODO: properly
+					// recover and hash the symbol
+					Slice primitiveSlice = new Slice(new Integer(
+							Objects.hash(symbolnode)),
+							Collections.<Integer> emptySet(),
+							Collections.<Symbol, Integer> emptyMap());
+
+					// add this single choice for this symbol to the list of
+					// choices
 					choicePoints.add(Collections.singleton(primitiveSlice));
-					
+
 				} else {
 					
-					// find slices for usedDeclarations
-					Set<Slice> choicePoint;
+					Set<Slice> choicePoint = Collections.emptySet();
+
+					for(Node usedDeclaration : usedDeclarations){
+						
+						if(usedDeclaration.equals(declarationnode)) continue;
+						choicePoint.addAll(generateDeclarationSlices(slices, usedDeclaration));
+						
+					}
 					choicePoints.add(choicePoint);
-					
+
 				}
-				
+
 			}
-			
+
 			// actual choices from possible choices
 			Set<List<Slice>> choices = Sets.cartesianProduct(choicePoints);
-			
+
 			// for every choice of slices
-			for(List<Slice> choice : choices){
-				
+			for (List<Slice> choice : choices) {
+
 				// every slice should only be used once
 				Set<Slice> uses = new HashSet<Slice>(choice);
-				
+
 				// the hashes of all used slices
-				Set<Integer> usedHashes = Sets.newHashSet(Iterables.transform(uses, use -> use.hash));
+				Set<Integer> usedHashes = Sets.newHashSet(Iterables.transform(
+						uses, use -> use.hash));
 
 				// empty map from symbol to slice hash to find conflicts
-				HashMap<Symbol,Integer> symbols = new HashMap<Symbol,Integer>();
-				
-				// the symbols declared by this declaration
-				Iterable<Node> declaredsymbols = new Hop(OUTGOING,DECLAREDSYMBOL).apply(declarationnode);
+				HashMap<Symbol, Integer> symbols = new HashMap<Symbol, Integer>();
 
-				//check symbols declared by this one
-				
+				// the symbols declared by this declaration
+				Iterable<Node> declaredsymbols = new Hop(OUTGOING,
+						DECLAREDSYMBOL).apply(declarationnode);
+
+				// check symbols declared by this one
+
 				// check for every slice that symbols are used consistently
-				for(Slice use : uses){
-					//check all uses are consistent
+				for (Slice use : uses) {
+					// check all uses are consistent
 				}
 
 				// the ast of this declaration
-				String ast = (String) declarationnode.getProperty("declarationast");
-				
+				String ast = (String) declarationnode
+						.getProperty("declarationast");
+
 				// the hash for this slice
-				Integer hash = Objects.hash(ast,uses);
-				
+				Integer hash = Objects.hash(ast, uses);
+
 				// add this slice to the slices for this declaration
-				slices.get(declarationnode).add(new Slice(hash,usedHashes,symbols));
-				
-				
-				
+				slices.get(declarationnode).add(
+						new Slice(hash, usedHashes, symbols));
+
 			}
-			
-			
+			return slices.get(declarationnode);
+
+		} else {
+			return declarationSlices;
 		}
 		
 	}
