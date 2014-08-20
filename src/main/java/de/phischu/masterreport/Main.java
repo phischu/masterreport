@@ -19,7 +19,12 @@ import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.TreeSet;
 
 import org.jfree.chart.ChartUtilities;
@@ -327,6 +332,88 @@ public class Main {
 		}
 		
 		return updates;
+		
+	}
+	
+	public static void generateSlices(GraphDatabaseService graphDb){
+		
+		// global map of all slices for each declaration
+		HashMap<Node,List<Slice>> slices = new HashMap<Node, List<Slice>>();
+		
+		// for each declaration
+		for(Node declarationnode : GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Declaration)){
+			
+			// for each symbol the set of slices that might be used
+			List<Set<Slice>> choicePoints = Collections.emptyList();
+			
+			// for each symbol
+			for(Node symbolnode : new Hop(OUTGOING,MENTIONEDSYMBOL).apply(declarationnode)){
+				
+				// declarations declaring this symbol TODO: and are a valid dependency
+				Iterable<Node> usedDeclarations = new Hop(INCOMING,DECLAREDSYMBOL).apply(symbolnode);
+				
+				// if there is nor declaration for this symbol it is primitive (probably from base)
+				if(Iterables.isEmpty(usedDeclarations)){
+					
+					// create a primitive slice for this symbol TODO: properly recover and hash the symbol
+					Slice primitiveSlice = new Slice(
+							new Integer(Objects.hash(symbolnode)),
+							Collections.<Integer>emptySet(),
+							Collections.<Symbol,Integer>emptyMap());
+					
+					// add this single choice for this symbol to the list of choices
+					choicePoints.add(Collections.singleton(primitiveSlice));
+					
+				} else {
+					
+					// find slices for usedDeclarations
+					Set<Slice> choicePoint;
+					choicePoints.add(choicePoint);
+					
+				}
+				
+			}
+			
+			// actual choices from possible choices
+			Set<List<Slice>> choices = Sets.cartesianProduct(choicePoints);
+			
+			// for every choice of slices
+			for(List<Slice> choice : choices){
+				
+				// every slice should only be used once
+				Set<Slice> uses = new HashSet<Slice>(choice);
+				
+				// the hashes of all used slices
+				Set<Integer> usedHashes = Sets.newHashSet(Iterables.transform(uses, use -> use.hash));
+
+				// empty map from symbol to slice hash to find conflicts
+				HashMap<Symbol,Integer> symbols = new HashMap<Symbol,Integer>();
+				
+				// the symbols declared by this declaration
+				Iterable<Node> declaredsymbols = new Hop(OUTGOING,DECLAREDSYMBOL).apply(declarationnode);
+
+				//check symbols declared by this one
+				
+				// check for every slice that symbols are used consistently
+				for(Slice use : uses){
+					//check all uses are consistent
+				}
+
+				// the ast of this declaration
+				String ast = (String) declarationnode.getProperty("declarationast");
+				
+				// the hash for this slice
+				Integer hash = Objects.hash(ast,uses);
+				
+				// add this slice to the slices for this declaration
+				slices.get(declarationnode).add(new Slice(hash,usedHashes,symbols));
+				
+				
+				
+			}
+			
+			
+		}
 		
 	}
 
