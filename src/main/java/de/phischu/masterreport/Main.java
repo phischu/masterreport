@@ -49,6 +49,8 @@ public class Main {
 	}
 
 	public static void main(String[] args) throws IOException {
+		
+//		installable(new Update("bytestring","0.10.2.0","base","4.6.0.1","base","4.6.0.1",false,false));
 
 		GraphDatabaseService graphDb = new GraphDatabaseFactory().newEmbeddedDatabase(DB_PATH);
 
@@ -91,7 +93,7 @@ public class Main {
 			
 			Iterable<Update> illegalUnsafe = Iterables.filter(updates,x -> !x.legal && x.symbolchanged);
 			int illegalunsafeupdatecount = Iterables.size(illegalUnsafe);
-			Iterable<Boolean> illegalUnsafeYetInstallable = Iterables.transform(illegalUnsafe,x -> installable(x));
+			//Iterable<Boolean> illegalUnsafeYetInstallable = Iterables.transform(illegalUnsafe,x -> installable(x));
 			
 			PrintWriter writer = new PrintWriter("counts", "UTF-8");
 			writer.println("Package count: " + packagecount);
@@ -163,7 +165,7 @@ public class Main {
 		System.out.println("--constraint=\"" + update.dependencyname2 + "==" + update.dependencyversion2 + "\"");
 		try {
 			Integer exitcode = systemCall("cabal",
-					"install","--reinstall","--force-reinstalls",
+					"install","--reinstall","--force-reinstalls","--disable-library-profiling",
 					"--allow-newer=" + update.dependencyname2,
 					"--constraint=" + update.dependencyname2 + "==" + update.dependencyversion2,
 					update.packagename + "-" + update.packageversion);
