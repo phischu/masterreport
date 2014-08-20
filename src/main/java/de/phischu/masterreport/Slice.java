@@ -14,5 +14,9 @@ public class Slice {
 	public Integer hash;
 	public Set<Integer> uses;
 	public Map<Symbol,Integer> symbols;
+	
+	public int hashCode(){
+		return hash;
+	}
 
 }

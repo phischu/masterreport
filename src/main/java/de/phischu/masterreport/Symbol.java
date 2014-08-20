@@ -11,4 +11,10 @@ public class Symbol {
 		return Objects.hash(origin,entity);
 	}
 
+	public Symbol(Origin origin, String entity) {
+		super();
+		this.origin = origin;
+		this.entity = entity;
+	}
+
 }

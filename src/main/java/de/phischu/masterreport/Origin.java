@@ -10,5 +10,11 @@ public class Origin {
 	public int hashCode(){
 		return Objects.hash(module,name);
 	}
+
+	public Origin(String module, String name) {
+		super();
+		this.module = module;
+		this.name = name;
+	}
 	
 }
