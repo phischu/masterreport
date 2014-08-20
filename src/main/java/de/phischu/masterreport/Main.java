@@ -115,7 +115,7 @@ public class Main {
 
 			plotBinary("legalupdates.png","Legal","Illegal",Iterables.transform(updates, x -> x.legal));
 			plotBinary("safeupdates.png","Safe","Unsafe",Iterables.transform(updates, x -> !x.symbolchanged));
-			plotBinary("illegalUnsafeYetInstallable.png", "Illegal Unsafe Installable", "Illegal Unsafe Installable", illegalUnsafeYetInstallable);
+			//plotBinary("illegalUnsafeYetInstallable.png", "Illegal Unsafe Installable", "Illegal Unsafe Installable", illegalUnsafeYetInstallable);
 
 			DefaultPieDataset dataset = new DefaultPieDataset();
 			dataset.setValue("All packages", hackagecount - attemptedpackages);
