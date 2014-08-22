@@ -63,6 +63,8 @@ public class Main {
 
 		Transaction tx = graphDb.beginTx();
 		try {
+			
+			generateSlices(graphDb);
 
 			System.out.println("Analysing Updates...");
 
@@ -337,8 +339,8 @@ public class Main {
 
 		// for each declaration
 		for (Node declarationnode : GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Declaration)) {
-
-			generateDeclarationSlices(slices, declarationnode);
+			
+			System.out.println(Iterables.size(generateDeclarationSlices(slices, declarationnode)));	
 
 		}
 
@@ -351,13 +353,13 @@ public class Main {
 		if (declarationSlices == null) {
 
 			// for each symbol the set of slices that might be used
-			List<Set<Slice>> choicePoints = Collections.emptyList();
+			List<Set<Slice>> choicePoints = Lists.newArrayList();
 
 			// for each symbol
 			for (Node symbolnode : new Hop(OUTGOING, MENTIONEDSYMBOL).apply(declarationnode)) {
 
 				// declarations declaring this symbol and are a proper dependency
-				List<Node> usedDeclarations = Collections.emptyList();
+				List<Node> usedDeclarations = Lists.newLinkedList();
 				for(Node usedDeclarationNode : new Hop(INCOMING, DECLAREDSYMBOL).apply(symbolnode)){
 					
 					Iterable<Node> dependencynodes = FluentIterable.from(Collections.singleton(declarationnode))
@@ -387,7 +389,7 @@ public class Main {
 				} else {
 
 					// set of options we will have
-					Set<Slice> choicePoint = Collections.emptySet();
+					Set<Slice> choicePoint = Sets.newHashSet();
 
 					// for every declaration used
 					for (Node usedDeclaration : usedDeclarations) {
@@ -469,8 +471,13 @@ public class Main {
 				// if symbol usage is consistent
 				if (consistent) {
 
+					Slice slice = new Slice(hash, usedHashes, symbols);
 					// add this slice to the slices for this declaration
-					slices.get(declarationnode).add(new Slice(hash, usedHashes, symbols));
+					if(slices.get(declarationnode) == null){
+						slices.put(declarationnode, Lists.newArrayList(slice));
+					}else{
+						slices.get(declarationnode).add(slice);
+					}
 				}
 
 			}
