@@ -40,6 +40,7 @@ import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 import org.neo4j.helpers.Pair;
 import org.neo4j.tooling.GlobalGraphOperations;
 
+import com.google.common.base.Function;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -68,7 +69,7 @@ public class Main {
 
 			System.out.println("Analysing Updates...");
 
-			LinkedList<Update> updates = Lists.newLinkedList(updates(graphDb));
+			LinkedList<ConcreteUpdate> updates = Lists.newLinkedList(updates(graphDb));
 
 			System.out.println("Counting ...");
 
@@ -100,7 +101,7 @@ public class Main {
 			int legalunsafeupdatecount = Iterables.size(Iterables.filter(updates, x -> x.legal && x.symbolchanged));
 			int illegalunsafeupdatecount = Iterables.size(Iterables.filter(updates, x -> !x.legal && x.symbolchanged));
 
-			Iterable<Update> illegalSafe = Iterables.filter(updates, x -> !x.legal && !x.symbolchanged);
+			Iterable<ConcreteUpdate> illegalSafe = Iterables.filter(updates, x -> !x.legal && !x.symbolchanged);
 			int illegalsafeupdatecount = Iterables.size(illegalSafe);
 			//Iterable<Boolean> illegalSafeYetInstallable =
 			//Iterables.transform(illegalSafe,x -> installable(x));
@@ -168,7 +169,7 @@ public class Main {
 
 	}
 
-	public static Boolean installable(Update update) {
+	public static Boolean installable(ConcreteUpdate update) {
 
 		System.out.println("Trying to install: ");
 		System.out.println(update.packagename + "-" + update.packageversion);
@@ -214,7 +215,21 @@ public class Main {
 		writer.close();
 
 	}
+	
+	public static Function<Node,Iterable<Node>> declaration = new Hop(OUTGOING,DECLARATION);
+	public static Function<Node,Iterable<Node>> declaredsymbol = new Hop(OUTGOING,DECLARATION);
 
+	public static Iterable<Node> provides(Node packagenode){
+		return FluentIterable.
+				from(Collections.singleton(packagenode)).
+				transformAndConcat(declaration).
+				transformAndConcat(declaredsymbol);
+	}
+	
+	public static Iterable<Node> removes(Update update){
+		
+	}
+	
 	public static Collection<Pair<String, String>> refactorings(GraphDatabaseService graphDb) {
 
 		Collection<Pair<String, String>> declarationastpairs = new LinkedList<Pair<String, String>>();
@@ -279,9 +294,9 @@ public class Main {
 		return true;
 	}
 
-	private static Iterable<Update> updates(GraphDatabaseService graphDb) {
+	private static Iterable<ConcreteUpdate> updates(GraphDatabaseService graphDb) {
 
-		LinkedList<Update> updates = new LinkedList<Update>();
+		LinkedList<ConcreteUpdate> updates = new LinkedList<ConcreteUpdate>();
 
 		Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package);
 
@@ -319,7 +334,7 @@ public class Main {
 						}
 					}
 
-					updates.add(new Update((String) packagenode.getProperty("packagename"), (String) packagenode
+					updates.add(new ConcreteUpdate((String) packagenode.getProperty("packagename"), (String) packagenode
 							.getProperty("packageversion"), (String) dependencynode1.getProperty("packagename"),
 							(String) dependencynode1.getProperty("packageversion"), (String) dependencynode2
 									.getProperty("packagename"),
