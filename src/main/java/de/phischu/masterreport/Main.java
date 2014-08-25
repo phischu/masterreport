@@ -227,6 +227,10 @@ public class Main {
 	}
 	
 	public static Iterable<Node> removes(Update update){
+		Set<Node> package2Symbols = Sets.newHashSet(provides(update.package2));
+		return FluentIterable.
+				from(provides(update.package1)).
+				filter(symbol -> !package2Symbols.contains(symbol));
 		
 	}
 	
