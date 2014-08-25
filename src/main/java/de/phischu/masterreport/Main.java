@@ -64,7 +64,7 @@ public class Main {
 		Transaction tx = graphDb.beginTx();
 		try {
 			
-			generateSlices(graphDb);
+			//generateSlices(graphDb);
 
 			System.out.println("Analysing Updates...");
 
@@ -98,12 +98,12 @@ public class Main {
 			int updatecount = Iterables.size(updates);
 			int legalsafeupdatecount = Iterables.size(Iterables.filter(updates, x -> x.legal && !x.symbolchanged));
 			int legalunsafeupdatecount = Iterables.size(Iterables.filter(updates, x -> x.legal && x.symbolchanged));
-			int illegalsafeupdatecount = Iterables.size(Iterables.filter(updates, x -> !x.legal && !x.symbolchanged));
+			int illegalunsafeupdatecount = Iterables.size(Iterables.filter(updates, x -> !x.legal && x.symbolchanged));
 
-			Iterable<Update> illegalUnsafe = Iterables.filter(updates, x -> !x.legal && x.symbolchanged);
-			int illegalunsafeupdatecount = Iterables.size(illegalUnsafe);
-			// Iterable<Boolean> illegalUnsafeYetInstallable =
-			// Iterables.transform(illegalUnsafe,x -> installable(x));
+			Iterable<Update> illegalSafe = Iterables.filter(updates, x -> !x.legal && !x.symbolchanged);
+			int illegalsafeupdatecount = Iterables.size(illegalSafe);
+			//Iterable<Boolean> illegalSafeYetInstallable =
+			//Iterables.transform(illegalSafe,x -> installable(x));
 
 			PrintWriter writer = new PrintWriter("counts", "UTF-8");
 			writer.println("Package count: " + packagecount);
@@ -125,9 +125,7 @@ public class Main {
 
 			plotBinary("legalupdates.png", "Legal", "Illegal", Iterables.transform(updates, x -> x.legal));
 			plotBinary("safeupdates.png", "Safe", "Unsafe", Iterables.transform(updates, x -> !x.symbolchanged));
-			// plotBinary("illegalUnsafeYetInstallable.png",
-			// "Illegal Unsafe Installable", "Illegal Unsafe Installable",
-			// illegalUnsafeYetInstallable);
+			//plotBinary("illegalSafeYetInstallable.png","Illegal Safe Installable", "Illegal Safe Installable",illegalSafeYetInstallable);
 
 			DefaultPieDataset dataset = new DefaultPieDataset();
 			dataset.setValue("All packages", hackagecount - attemptedpackages);
@@ -177,7 +175,10 @@ public class Main {
 		System.out.println("with");
 		System.out.println("--constraint=\"" + update.dependencyname2 + "==" + update.dependencyversion2 + "\"");
 		try {
+			systemCall("cabal","sandbox","delete");
+			systemCall("cabal","sandbox","init");
 			Integer exitcode = systemCall("cabal", "install", "--reinstall", "--force-reinstalls",
+					"--disable-documentation",
 					"--disable-library-profiling", "--allow-newer=" + update.dependencyname2, "--constraint="
 							+ update.dependencyname2 + "==" + update.dependencyversion2, update.packagename + "-"
 							+ update.packageversion);
@@ -193,8 +194,8 @@ public class Main {
 
 		ProcessBuilder processbuilder = new ProcessBuilder(command);
 		Process process = processbuilder.start();
-		ByteStreams.copy(process.getInputStream(), System.out);
-		ByteStreams.copy(process.getErrorStream(), System.out);
+		//ByteStreams.copy(process.getInputStream(), System.out);
+		//ByteStreams.copy(process.getErrorStream(), System.out);
 		return process.waitFor();
 
 	}
@@ -285,6 +286,8 @@ public class Main {
 		Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package);
 
 		for (Node packagenode : packagenodes) {
+			
+			if(!packagenode.hasRelationship(OUTGOING, DECLARATION)) continue;
 
 			for (Node dependencynode1 : new Hop(OUTGOING, DEPENDENCY).apply(packagenode)) {
 
