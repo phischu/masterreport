@@ -272,6 +272,10 @@ public class Main {
 		return Iterables.concat(removedSymbols,alteredSymbols);
 	}
 	
+	public static Iterable<Node> fixes(Update update){
+		return update.minorMajor == "minor" ? alters(update) : Collections.emptySet();
+	}
+	
 	public static Iterable<Node> requires(Node packagenode){
 		return FluentIterable.from(Collections.singleton(packagenode)).
 				transformAndConcat(p -> declares(p)).
