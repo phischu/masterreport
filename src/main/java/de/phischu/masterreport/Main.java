@@ -225,6 +225,9 @@ public class Main {
 	public static Iterable<Node> boundBy(Node symbolnode){
 		return new Hop(INCOMING,DECLAREDSYMBOL).apply(symbolnode);
 	}
+	public static Iterable<Node> mentions(Node declarationnode){
+		return new Hop(OUTGOING,MENTIONEDSYMBOL).apply(declarationnode);
+	}
 	public static Iterable<String> source(Node declarationnode){
 		return Collections.singleton((String) declarationnode.getProperty("declarationast"));
 	}
@@ -267,6 +270,12 @@ public class Main {
 		Iterable<Node> removedSymbols = removes(update);
 		Iterable<Node> alteredSymbols = update.minorMajor == "major" ? alters(update) : Collections.emptySet();
 		return Iterables.concat(removedSymbols,alteredSymbols);
+	}
+	
+	public static Iterable<Node> requires(Node packagenode){
+		return FluentIterable.from(Collections.singleton(packagenode)).
+				transformAndConcat(p -> declares(p)).
+				transformAndConcat(d -> mentions(d));
 	}
 	
 	public static Collection<Pair<String, String>> refactorings(GraphDatabaseService graphDb) {
