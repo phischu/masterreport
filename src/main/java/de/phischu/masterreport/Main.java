@@ -40,12 +40,10 @@ import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 import org.neo4j.helpers.Pair;
 import org.neo4j.tooling.GlobalGraphOperations;
 
-import com.google.common.base.Function;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.google.common.io.ByteStreams;
 
 public class Main {
 
@@ -69,7 +67,9 @@ public class Main {
 
 			System.out.println("Analysing Updates...");
 
-			LinkedList<ConcreteUpdate> updates = Lists.newLinkedList(updates(graphDb));
+			LinkedList<ConcreteUpdate> concreteUpdatesList = Lists.newLinkedList(concreteUpdates(graphDb));
+			LinkedList<Pair<Boolean,Boolean>> legalAffects = Lists.newLinkedList(FluentIterable.from(concreteUpdatesList).
+					transform(c -> Pair.of(legal(c),affects(c.update,c.packagenode))));
 
 			System.out.println("Counting ...");
 
@@ -96,15 +96,11 @@ public class Main {
 
 			int symbolcount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Symbol));
 
-			int updatecount = Iterables.size(updates);
-			int legalsafeupdatecount = Iterables.size(Iterables.filter(updates, x -> x.legal && !x.symbolchanged));
-			int legalunsafeupdatecount = Iterables.size(Iterables.filter(updates, x -> x.legal && x.symbolchanged));
-			int illegalunsafeupdatecount = Iterables.size(Iterables.filter(updates, x -> !x.legal && x.symbolchanged));
-
-			Iterable<ConcreteUpdate> illegalSafe = Iterables.filter(updates, x -> !x.legal && !x.symbolchanged);
-			int illegalsafeupdatecount = Iterables.size(illegalSafe);
-			//Iterable<Boolean> illegalSafeYetInstallable =
-			//Iterables.transform(illegalSafe,x -> installable(x));
+			int updatecount = Iterables.size(legalAffects);
+			int legalunaffectedupdatecount = Iterables.size(Iterables.filter(legalAffects, x -> x.first() && !x.other()));
+			int legalaffectedupdatecount = Iterables.size(Iterables.filter(legalAffects, x -> x.first() && x.other()));
+			int illegalaffectedupdatecount = Iterables.size(Iterables.filter(legalAffects, x -> !x.first() && x.other()));
+			int illegalunaffectedupdatecount = Iterables.size(Iterables.filter(legalAffects, x -> !x.first() && !x.other()));
 
 			PrintWriter writer = new PrintWriter("counts", "UTF-8");
 			writer.println("Package count: " + packagecount);
@@ -112,10 +108,10 @@ public class Main {
 			writer.println("Declaration AST count: " + declarationastcount);
 			writer.println("Symbol count: " + symbolcount);
 			writer.println("Update count:" + updatecount);
-			writer.println("Legal safe update count: " + legalsafeupdatecount);
-			writer.println("Legal unsafe update count: " + legalunsafeupdatecount);
-			writer.println("Illegal safe update count: " + illegalsafeupdatecount);
-			writer.println("Illegal unsafe update count: " + illegalunsafeupdatecount);
+			writer.println("Legal safe update count: " + legalunaffectedupdatecount);
+			writer.println("Legal unsafe update count: " + legalaffectedupdatecount);
+			writer.println("Illegal safe update count: " + illegalaffectedupdatecount);
+			writer.println("Illegal unsafe update count: " + illegalunaffectedupdatecount);
 
 			writer.close();
 
@@ -124,8 +120,8 @@ public class Main {
 
 			System.out.println("Plotting ...");
 
-			plotBinary("legalupdates.png", "Legal", "Illegal", Iterables.transform(updates, x -> x.legal));
-			plotBinary("safeupdates.png", "Safe", "Unsafe", Iterables.transform(updates, x -> !x.symbolchanged));
+			plotBinary("legalupdates.png", "Legal", "Illegal", Iterables.transform(legalAffects, x -> x.first()));
+			plotBinary("safeupdates.png", "Safe", "Unsafe", Iterables.transform(legalAffects, x -> !x.other()));
 			//plotBinary("illegalSafeYetInstallable.png","Illegal Safe Installable", "Illegal Safe Installable",illegalSafeYetInstallable);
 
 			DefaultPieDataset dataset = new DefaultPieDataset();
@@ -168,7 +164,7 @@ public class Main {
 		ChartUtilities.saveChartAsPNG(new File(outputpath), chart, 1024, 768);
 
 	}
-
+/*
 	public static Boolean installable(ConcreteUpdate update) {
 
 		System.out.println("Trying to install: ");
@@ -190,7 +186,7 @@ public class Main {
 			return false;
 		}
 	}
-
+*/
 	public static int systemCall(String... command) throws InterruptedException, IOException {
 
 		ProcessBuilder processbuilder = new ProcessBuilder(command);
@@ -226,6 +222,11 @@ public class Main {
 	}
 	public static Iterable<Node> dependency(Node packagenode){
 		return new Hop(OUTGOING,DEPENDENCY).apply(packagenode);
+	}
+	public static Boolean legal(ConcreteUpdate concreteUpdate){
+		Collection<Node> packageDependencies = Sets.newHashSet(dependency(concreteUpdate.packagenode));
+		return packageDependencies.contains(concreteUpdate.update.package1) &&
+				packageDependencies.contains(concreteUpdate.update.package2);
 	}
 	public static Iterable<Node> declares(Node packagenode){
 		return new Hop(OUTGOING,DECLARATION).apply(packagenode);
@@ -367,12 +368,6 @@ public class Main {
 				return false;
 		}
 		return true;
-	}
-
-	private static Iterable<ConcreteUpdate> unaffectedConcreteUpdates(GraphDatabaseService graphDb) {
-		
-		return FluentIterable.from(concreteUpdates(graphDb)).filter(c -> !affect(c.update,c.packagenode));
-
 	}
 
 	public static void generateSlices(GraphDatabaseService graphDb) {
