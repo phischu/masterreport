@@ -278,6 +278,12 @@ public class Main {
 				transformAndConcat(d -> mentions(d));
 	}
 	
+	public static Boolean affects(Update update,Node packagenode){
+		Collection<Node> brokenSymbols = Sets.newHashSet(breaks(update));
+		return FluentIterable.from(requires(packagenode)).
+				anyMatch(s -> brokenSymbols.contains(s));
+	}
+	
 	public static Collection<Pair<String, String>> refactorings(GraphDatabaseService graphDb) {
 
 		Collection<Pair<String, String>> declarationastpairs = new LinkedList<Pair<String, String>>();
