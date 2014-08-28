@@ -219,11 +219,11 @@ public class Main {
 	public static Iterable<Node> declares(Node packagenode){
 		return new Hop(OUTGOING,DECLARATION).apply(packagenode);
 	}
-	public static Iterable<Node> declaredBy(Node symbolnode){
-		return new Hop(INCOMING,DECLARATION).apply(symbolnode);
-	}
 	public static Iterable<Node> binds(Node declarationnode){
 		return new Hop(OUTGOING,DECLAREDSYMBOL).apply(declarationnode);
+	}
+	public static Iterable<Node> boundBy(Node symbolnode){
+		return new Hop(INCOMING,DECLAREDSYMBOL).apply(symbolnode);
 	}
 	public static Iterable<String> source(Node declarationnode){
 		return Collections.singleton((String) declarationnode.getProperty("declarationast"));
@@ -257,7 +257,7 @@ public class Main {
 		return FluentIterable.from(declares(update.package1)).
 				transformAndConcat(d1 ->
 				    FluentIterable.from(binds(d1)).
-				        transformAndConcat(s -> FluentIterable.from(declaredBy(s)).
+				        transformAndConcat(s -> FluentIterable.from(boundBy(s)).
 				            anyMatch(d2 -> package2Declarations.contains(d2) && source(d1) == source(d2)) ?
 				            	Collections.singleton(s) : Collections.emptySet()));
 		
