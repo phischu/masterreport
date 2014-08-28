@@ -263,6 +263,12 @@ public class Main {
 		
 	}
 	
+	public static Iterable<Node> breaks(Update update){
+		Iterable<Node> removedSymbols = removes(update);
+		Iterable<Node> alteredSymbols = update.minorMajor == "major" ? alters(update) : Collections.emptySet();
+		return Iterables.concat(removedSymbols,alteredSymbols);
+	}
+	
 	public static Collection<Pair<String, String>> refactorings(GraphDatabaseService graphDb) {
 
 		Collection<Pair<String, String>> declarationastpairs = new LinkedList<Pair<String, String>>();
