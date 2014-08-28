@@ -216,14 +216,24 @@ public class Main {
 
 	}
 	
-	public static Function<Node,Iterable<Node>> declaration = new Hop(OUTGOING,DECLARATION);
-	public static Function<Node,Iterable<Node>> declaredsymbol = new Hop(OUTGOING,DECLARATION);
+	public static Iterable<Node> declares(Node packagenode){
+		return new Hop(OUTGOING,DECLARATION).apply(packagenode);
+	}
+	public static Iterable<Node> declaredBy(Node symbolnode){
+		return new Hop(INCOMING,DECLARATION).apply(symbolnode);
+	}
+	public static Iterable<Node> binds(Node declarationnode){
+		return new Hop(OUTGOING,DECLAREDSYMBOL).apply(declarationnode);
+	}
+	public static Iterable<String> source(Node declarationnode){
+		return Collections.singleton((String) declarationnode.getProperty("declarationast"));
+	}
 
 	public static Iterable<Node> provides(Node packagenode){
 		return FluentIterable.
 				from(Collections.singleton(packagenode)).
-				transformAndConcat(declaration).
-				transformAndConcat(declaredsymbol);
+				transformAndConcat(p -> declares(p)).
+				transformAndConcat(d -> binds(d));
 	}
 	
 	public static Iterable<Node> removes(Update update){
@@ -231,6 +241,25 @@ public class Main {
 		return FluentIterable.
 				from(provides(update.package1)).
 				filter(symbol -> !package2Symbols.contains(symbol));
+		
+	}
+	
+	public static Iterable<Node> adds(Update update){
+		Set<Node> package1Symbols = Sets.newHashSet(provides(update.package1));
+		return FluentIterable.
+				from(provides(update.package2)).
+				filter(symbol -> !package1Symbols.contains(symbol));
+		
+	}
+	
+	public static Iterable<Node> alters(Update update){
+		Set<Node> package2Declarations = Sets.newHashSet(declares(update.package2));
+		return FluentIterable.from(declares(update.package1)).
+				transformAndConcat(d1 ->
+				    FluentIterable.from(binds(d1)).
+				        transformAndConcat(s -> FluentIterable.from(declaredBy(s)).
+				            anyMatch(d2 -> package2Declarations.contains(d2) && source(d1) == source(d2)) ?
+				            	Collections.singleton(s) : Collections.emptySet()));
 		
 	}
 	
