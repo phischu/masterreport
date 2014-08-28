@@ -215,7 +215,18 @@ public class Main {
 		writer.close();
 
 	}
-	
+	public static Iterable<Node> packages(GraphDatabaseService graphDb){
+		return FluentIterable.from(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package)).
+				filter(p -> !Iterables.isEmpty(declares(p)));
+	}
+	public static Iterable<Update> update(Node packagenode){
+		return FluentIterable.from(Collections.singleton(packagenode)).
+				transformAndConcat(packagenode1 -> packagenode1.getRelationships(OUTGOING, NEXTVERSION)).
+				transform(r -> new Update((String)r.getProperty("change"), packagenode,r.getEndNode()));
+	}
+	public static Iterable<Node> dependency(Node packagenode){
+		return new Hop(OUTGOING,DEPENDENCY).apply(packagenode);
+	}
 	public static Iterable<Node> declares(Node packagenode){
 		return new Hop(OUTGOING,DECLARATION).apply(packagenode);
 	}
@@ -230,6 +241,12 @@ public class Main {
 	}
 	public static Iterable<String> source(Node declarationnode){
 		return Collections.singleton((String) declarationnode.getProperty("declarationast"));
+	}
+	public static Iterable<ConcreteUpdate> concreteUpdates(GraphDatabaseService graphDb){
+		return FluentIterable.from(packages(graphDb)).
+				transformAndConcat(p -> FluentIterable.from(dependency(p)).
+						transformAndConcat(d -> FluentIterable.from(update(d)).
+								transform(u -> new ConcreteUpdate(u,p))));
 	}
 
 	public static Iterable<Node> provides(Node packagenode){
@@ -352,59 +369,9 @@ public class Main {
 		return true;
 	}
 
-	private static Iterable<ConcreteUpdate> updates(GraphDatabaseService graphDb) {
-
-		LinkedList<ConcreteUpdate> updates = new LinkedList<ConcreteUpdate>();
-
-		Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package);
-
-		for (Node packagenode : packagenodes) {
-			
-			if(!packagenode.hasRelationship(OUTGOING, DECLARATION)) continue;
-
-			for (Node dependencynode1 : new Hop(OUTGOING, DEPENDENCY).apply(packagenode)) {
-
-				for (Node dependencynode2 : new Hop(OUTGOING, NEXTVERSION).apply(dependencynode1)) {
-
-					Boolean updatelegal = Iterables.contains(new Hop(OUTGOING, DEPENDENCY).apply(packagenode),
-							dependencynode2);
-
-					Boolean symbolchanged = false;
-
-					for (Node usedsymbolnode : FluentIterable.from(Collections.singleton(packagenode))
-							.transformAndConcat(new Hop(OUTGOING, DECLARATION))
-							.transformAndConcat(new Hop(OUTGOING, MENTIONEDSYMBOL))) {
-
-						FluentIterable<Node> declarationnodes = FluentIterable.from(
-								Collections.singleton(usedsymbolnode)).transformAndConcat(
-								new Hop(INCOMING, DECLAREDSYMBOL));
-
-						FluentIterable<String> originaldeclarationasts = declarationnodes.filter(
-								x -> Iterables.contains(new Hop(INCOMING, DECLARATION).apply(x), dependencynode1))
-								.transform(x -> (String) x.getProperty("declarationast"));
-
-						FluentIterable<String> updateddeclarationasts = declarationnodes.filter(
-								x -> Iterables.contains(new Hop(INCOMING, DECLARATION).apply(x), dependencynode2))
-								.transform(x -> (String) x.getProperty("declarationast"));
-
-						if (!containsAll(updateddeclarationasts, originaldeclarationasts)) {
-							symbolchanged = true;
-						}
-					}
-
-					updates.add(new ConcreteUpdate((String) packagenode.getProperty("packagename"), (String) packagenode
-							.getProperty("packageversion"), (String) dependencynode1.getProperty("packagename"),
-							(String) dependencynode1.getProperty("packageversion"), (String) dependencynode2
-									.getProperty("packagename"),
-							(String) dependencynode2.getProperty("packageversion"), symbolchanged, updatelegal));
-
-				}
-
-			}
-
-		}
-
-		return updates;
+	private static Iterable<ConcreteUpdate> unaffectedConcreteUpdates(GraphDatabaseService graphDb) {
+		
+		return FluentIterable.from(concreteUpdates(graphDb)).filter(c -> !affect(c.update,c.packagenode));
 
 	}
 
