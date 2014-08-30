@@ -71,7 +71,7 @@ public class Main {
 
 			List<UpdateScenario> updateScenarioList = Lists.newLinkedList(updateScenarios(graphDb));
 			List<Boolean> isLegalList = Lists.transform(updateScenarioList, x -> legal(x));
-			List<Boolean> isMinorList = Lists.transform(updateScenarioList, x -> x.update.minorMajor == "minor");
+			List<Boolean> isMinorList = Lists.transform(updateScenarioList, x -> x.update.minorMajor.equals("minor"));
 			List<Boolean> affectsList = Lists.transform(updateScenarioList, x -> affects(x.update,x.packagenode));
 
 			System.out.println("Counting ...");
@@ -93,19 +93,19 @@ public class Main {
 					size();
 			int updatescenariocount = updateScenarioList.size();
 			
-			int prohibitedcount = FluentIterable.from(isLegalList).filter(x -> !x).size();
-			int prohibitedunaffectedcount = Iterables.size(zipWith(isLegalList,affectsList,(l,a) -> !l && !a));
+			int prohibitedcount = countFalse(isLegalList);
+			int prohibitedunaffectedcount = countTrue(zipWith(isLegalList,affectsList,(l,a) -> !l && !a));
 			
-			int minorcount = FluentIterable.from(isMinorList).filter(x -> x).size();
-			int minorprohibitedcount = FluentIterable.from(zipWith(isMinorList,isLegalList,(m,l) -> m && !l)).size();
+			int minorcount = countTrue(isMinorList);
+			int minorprohibitedcount = countTrue(zipWith(isMinorList,isLegalList,(m,l) -> m && !l));
 			
-			int majorcount = FluentIterable.from(isMinorList).filter(x -> !x).size();
-			int majorprohibitedcount = FluentIterable.from(zipWith(isMinorList,isLegalList,(m,l) -> !m && !l)).size();
-			int majorprohibitedunaffectedcount = FluentIterable.from(zipWith3(isMinorList,isLegalList,affectsList,
-					m -> l -> a -> !m && !l && !a)).size();
-			int majorallowedcount = FluentIterable.from(zipWith(isMinorList,isLegalList,(m,l) -> !m && l)).size();
-			int majorallowedunaffectedcount = FluentIterable.from(zipWith3(isMinorList,isLegalList,affectsList,
-					m -> l -> a -> !m && l && !a)).size();
+			int majorcount = countFalse(isMinorList);
+			int majorprohibitedcount = countTrue(zipWith(isMinorList,isLegalList,(m,l) -> !m && !l));
+			int majorprohibitedunaffectedcount = countTrue(zipWith3(isMinorList,isLegalList,affectsList,
+					m -> l -> a -> !m && !l && !a));
+			int majorallowedcount = countTrue(zipWith(isMinorList,isLegalList,(m,l) -> !m && l));
+			int majorallowedunaffectedcount = countTrue(zipWith3(isMinorList,isLegalList,affectsList,
+					m -> l -> a -> !m && l && !a));
 
 			PrintWriter writer = new PrintWriter("counts", "UTF-8");
 			writer.println("Package count: " + packagecount);
@@ -192,6 +192,14 @@ public class Main {
 	    };
 	}
 	
+	public static int countTrue(Iterable<Boolean> bs){
+		return FluentIterable.from(bs).filter(x -> x).size();
+	}
+	
+	public static int countFalse(Iterable<Boolean> bs){
+		return FluentIterable.from(bs).filter(x -> !x).size();
+	}
+	
 	public static void plotBinary(String outputpath, String name1, String name2, Iterable<Boolean> data)
 			throws IOException {
 
@@ -223,7 +231,7 @@ public class Main {
 							+ update.dependencyname2 + "==" + update.dependencyversion2, update.packagename + "-"
 							+ update.packageversion);
 			System.out.println(exitcode);
-			return exitcode == 0;
+			return exitcode.equals(0);
 		} catch (InterruptedException | IOException e) {
 			e.printStackTrace();
 			return false;
@@ -322,19 +330,19 @@ public class Main {
 				transformAndConcat(d1 ->
 				    FluentIterable.from(binds(d1)).
 				        transformAndConcat(s -> FluentIterable.from(boundBy(s)).
-				            anyMatch(d2 -> package2Declarations.contains(d2) && source(d1) == source(d2)) ?
+				            anyMatch(d2 -> package2Declarations.contains(d2) && source(d1).equals(source(d2))) ?
 				            	Collections.singleton(s) : Collections.emptySet()));
 		
 	}
 	
 	public static Iterable<Node> breaks(Update update){
 		Iterable<Node> removedSymbols = removes(update);
-		Iterable<Node> alteredSymbols = update.minorMajor == "major" ? alters(update) : Collections.emptySet();
+		Iterable<Node> alteredSymbols = update.minorMajor.equals("major") ? alters(update) : Collections.emptySet();
 		return Iterables.concat(removedSymbols,alteredSymbols);
 	}
 	
 	public static Iterable<Node> fixes(Update update){
-		return update.minorMajor == "minor" ? alters(update) : Collections.emptySet();
+		return update.minorMajor.equals("minor") ? alters(update) : Collections.emptySet();
 	}
 	
 	public static Iterable<Node> requires(Node packagenode){
