@@ -21,12 +21,14 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TreeSet;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 import org.jfree.chart.ChartUtilities;
 import org.jfree.chart.JFreeChart;
@@ -67,51 +69,60 @@ public class Main {
 
 			System.out.println("Analysing Updates...");
 
-			LinkedList<ConcreteUpdate> concreteUpdatesList = Lists.newLinkedList(concreteUpdates(graphDb));
-			LinkedList<Pair<Boolean,Boolean>> legalAffects = Lists.newLinkedList(FluentIterable.from(concreteUpdatesList).
-					transform(c -> Pair.of(legal(c),affects(c.update,c.packagenode))));
+			List<UpdateScenario> updateScenarioList = Lists.newLinkedList(updateScenarios(graphDb));
+			List<Boolean> isLegalList = Lists.transform(updateScenarioList, x -> legal(x));
+			List<Boolean> isMinorList = Lists.transform(updateScenarioList, x -> x.update.minorMajor == "minor");
+			List<Boolean> affectsList = Lists.transform(updateScenarioList, x -> affects(x.update,x.packagenode));
 
 			System.out.println("Counting ...");
 
 			int hackagecount = 40160;
-			Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package);
-			int packagecount = Iterables.size(packagenodes);
-			int attemptedpackages = 0;
-			int successfulpackages = 0;
-			for (Node packagenode : packagenodes) {
-				attemptedpackages += 1;
-				if (packagenode.hasRelationship(OUTGOING, DECLARATION)) {
-					successfulpackages += 1;
-				}
-			}
-
+			int attemptedpackages = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package));
+			int packagecount = Iterables.size(packages(graphDb));
+			
 			Iterable<Node> declarationnodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Declaration);
-			int declarationcount = Iterables.size(declarationnodes);
-
-			TreeSet<String> declarationasts = new TreeSet<String>();
-			for (Node declarationnode : declarationnodes) {
-				declarationasts.add((String) declarationnode.getProperty("declarationast"));
-			}
-			int declarationastcount = declarationasts.size();
-
+			int declarationcount = FluentIterable.from(declarationnodes).size();
+			int declarationastcount = FluentIterable.from(declarationnodes).
+					transform(x -> x.getProperty("declarationast")).
+					toSet().
+					size();
 			int symbolcount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Symbol));
 
-			int updatecount = Iterables.size(legalAffects);
-			int legalunaffectedupdatecount = Iterables.size(Iterables.filter(legalAffects, x -> x.first() && !x.other()));
-			int legalaffectedupdatecount = Iterables.size(Iterables.filter(legalAffects, x -> x.first() && x.other()));
-			int illegalaffectedupdatecount = Iterables.size(Iterables.filter(legalAffects, x -> !x.first() && x.other()));
-			int illegalunaffectedupdatecount = Iterables.size(Iterables.filter(legalAffects, x -> !x.first() && !x.other()));
+			int updatecount = FluentIterable.from(packages(graphDb)).
+					transformAndConcat(p -> update(p)).
+					size();
+			int updatescenariocount = updateScenarioList.size();
+			
+			int prohibitedcount = FluentIterable.from(isLegalList).filter(x -> !x).size();
+			int prohibitedunaffectedcount = Iterables.size(zipWith(isLegalList,affectsList,(l,a) -> !l && !a));
+			
+			int minorcount = FluentIterable.from(isMinorList).filter(x -> x).size();
+			int minorprohibitedcount = FluentIterable.from(zipWith(isMinorList,isLegalList,(m,l) -> m && !l)).size();
+			
+			int majorcount = FluentIterable.from(isMinorList).filter(x -> !x).size();
+			int majorprohibitedcount = FluentIterable.from(zipWith(isMinorList,isLegalList,(m,l) -> !m && !l)).size();
+			int majorprohibitedunaffectedcount = FluentIterable.from(zipWith3(isMinorList,isLegalList,affectsList,
+					m -> l -> a -> !m && !l && !a)).size();
+			int majorallowedcount = FluentIterable.from(zipWith(isMinorList,isLegalList,(m,l) -> !m && l)).size();
+			int majorallowedunaffectedcount = FluentIterable.from(zipWith3(isMinorList,isLegalList,affectsList,
+					m -> l -> a -> !m && l && !a)).size();
 
 			PrintWriter writer = new PrintWriter("counts", "UTF-8");
 			writer.println("Package count: " + packagecount);
 			writer.println("Declaration count: " + declarationcount);
 			writer.println("Declaration AST count: " + declarationastcount);
 			writer.println("Symbol count: " + symbolcount);
-			writer.println("Update count:" + updatecount);
-			writer.println("Legal safe update count: " + legalunaffectedupdatecount);
-			writer.println("Legal unsafe update count: " + legalaffectedupdatecount);
-			writer.println("Illegal safe update count: " + illegalaffectedupdatecount);
-			writer.println("Illegal unsafe update count: " + illegalunaffectedupdatecount);
+			writer.println("Update count: " + updatecount);
+			writer.println("Update scenario count: " + updatescenariocount);
+			writer.println("Prohibited: " + prohibitedcount);
+			writer.println("Prohibited Unaffected: " + prohibitedunaffectedcount);
+			writer.println("Minor: " + minorcount);
+			writer.println("Minor Prohibited: " + minorprohibitedcount);
+			writer.println("Major: " + majorcount);
+			writer.println("Major Prohibited: " + majorprohibitedcount);
+			writer.println("Major Prohibited Unaffected: " + majorprohibitedunaffectedcount);
+			writer.println("Major Allowed: " + majorallowedcount);
+			writer.println("Major Allowed Unaffected: " + majorallowedunaffectedcount);
 
 			writer.close();
 
@@ -120,14 +131,14 @@ public class Main {
 
 			System.out.println("Plotting ...");
 
-			plotBinary("legalupdates.png", "Legal", "Illegal", Iterables.transform(legalAffects, x -> x.first()));
-			plotBinary("safeupdates.png", "Safe", "Unsafe", Iterables.transform(legalAffects, x -> !x.other()));
+			plotBinary("legalupdates.png", "Legal", "Illegal", isLegalList);
+			plotBinary("safeupdates.png", "Safe", "Unsafe", Iterables.transform(affectsList, x -> !x));
 			//plotBinary("illegalSafeYetInstallable.png","Illegal Safe Installable", "Illegal Safe Installable",illegalSafeYetInstallable);
 
 			DefaultPieDataset dataset = new DefaultPieDataset();
 			dataset.setValue("All packages", hackagecount - attemptedpackages);
-			dataset.setValue("Attempted packages", attemptedpackages - successfulpackages);
-			dataset.setValue("Successful packages", successfulpackages);
+			dataset.setValue("Attempted packages", attemptedpackages - packagecount);
+			dataset.setValue("Successful packages", packagecount);
 
 			PiePlot plot = new PiePlot(dataset);
 			plot.setSectionPaint("All packages", Color.gray);
@@ -149,6 +160,38 @@ public class Main {
 
 	}
 
+	public static <A,B,C> Iterable<C> zipWith(Iterable<A> iterableA, Iterable<B> iterableB, BiFunction<A,B,C> fn) {
+	    return () -> new Iterator<C>() {
+	        private Iterator<A> itA = iterableA.iterator();
+	        private Iterator<B> itB = iterableB.iterator();
+	 
+	        public boolean hasNext() {
+	            return itA.hasNext() && itB.hasNext();
+	        }
+	 
+	        public C next() {
+	            return fn.apply(itA.next(), itB.next());
+	        }
+	    };
+	}
+	
+	public static <A,B,C,D> Iterable<D> zipWith3(
+			Iterable<A> iterableA, Iterable<B> iterableB, Iterable<C> iterableC, Function<A,Function<B,Function<C,D>>> fn) {
+	    return () -> new Iterator<D>() {
+	        private Iterator<A> itA = iterableA.iterator();
+	        private Iterator<B> itB = iterableB.iterator();
+	        private Iterator<C> itC = iterableC.iterator();
+	        
+	        public boolean hasNext() {
+	            return itA.hasNext() && itB.hasNext() && itC.hasNext();
+	        }
+	 
+	        public D next() {
+	            return fn.apply(itA.next()).apply(itB.next()).apply(itC.next());
+	        }
+	    };
+	}
+	
 	public static void plotBinary(String outputpath, String name1, String name2, Iterable<Boolean> data)
 			throws IOException {
 
@@ -223,10 +266,10 @@ public class Main {
 	public static Iterable<Node> dependency(Node packagenode){
 		return new Hop(OUTGOING,DEPENDENCY).apply(packagenode);
 	}
-	public static Boolean legal(ConcreteUpdate concreteUpdate){
-		Collection<Node> packageDependencies = Sets.newHashSet(dependency(concreteUpdate.packagenode));
-		return packageDependencies.contains(concreteUpdate.update.package1) &&
-				packageDependencies.contains(concreteUpdate.update.package2);
+	public static Boolean legal(UpdateScenario updateScenario){
+		Collection<Node> packageDependencies = Sets.newHashSet(dependency(updateScenario.packagenode));
+		return packageDependencies.contains(updateScenario.update.package1) &&
+				packageDependencies.contains(updateScenario.update.package2);
 	}
 	public static Iterable<Node> declares(Node packagenode){
 		return new Hop(OUTGOING,DECLARATION).apply(packagenode);
@@ -243,11 +286,11 @@ public class Main {
 	public static Iterable<String> source(Node declarationnode){
 		return Collections.singleton((String) declarationnode.getProperty("declarationast"));
 	}
-	public static Iterable<ConcreteUpdate> concreteUpdates(GraphDatabaseService graphDb){
+	public static Iterable<UpdateScenario> updateScenarios(GraphDatabaseService graphDb){
 		return FluentIterable.from(packages(graphDb)).
 				transformAndConcat(p -> FluentIterable.from(dependency(p)).
 						transformAndConcat(d -> FluentIterable.from(update(d)).
-								transform(u -> new ConcreteUpdate(u,p))));
+								transform(u -> new UpdateScenario(u,p))));
 	}
 
 	public static Iterable<Node> provides(Node packagenode){
