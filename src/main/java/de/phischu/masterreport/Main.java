@@ -267,8 +267,7 @@ public class Main {
 				filter(p -> !Iterables.isEmpty(declares(p)));
 	}
 	public static Iterable<Update> update(Node packagenode){
-		return FluentIterable.from(Collections.singleton(packagenode)).
-				transformAndConcat(packagenode1 -> packagenode1.getRelationships(OUTGOING, NEXTVERSION)).
+		return FluentIterable.from(packagenode.getRelationships(OUTGOING, NEXTVERSION)).
 				transform(r -> new Update((String)r.getProperty("change"), packagenode,r.getEndNode()));
 	}
 	public static Iterable<Node> dependency(Node packagenode){
@@ -291,14 +290,19 @@ public class Main {
 	public static Iterable<Node> mentions(Node declarationnode){
 		return new Hop(OUTGOING,MENTIONEDSYMBOL).apply(declarationnode);
 	}
-	public static Iterable<String> source(Node declarationnode){
-		return Collections.singleton((String) declarationnode.getProperty("declarationast"));
+	public static String source(Node declarationnode){
+		return (String) declarationnode.getProperty("declarationast");
 	}
 	public static Iterable<UpdateScenario> updateScenarios(GraphDatabaseService graphDb){
-		return FluentIterable.from(packages(graphDb)).
-				transformAndConcat(p -> FluentIterable.from(dependency(p)).
-						transformAndConcat(d -> FluentIterable.from(update(d)).
-								transform(u -> new UpdateScenario(u,p))));
+		List<UpdateScenario> us = Lists.newLinkedList();
+		for(Node p : packages(graphDb)){
+			for(Node d : dependency(p)){
+				for(Update u : update(d)){
+					us.add(new UpdateScenario(u,p));
+				}
+			}
+		}
+		return us;
 	}
 
 	public static Iterable<Node> provides(Node packagenode){
