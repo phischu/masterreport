@@ -294,15 +294,10 @@ public class Main {
 		return (String) declarationnode.getProperty("declarationast");
 	}
 	public static Iterable<UpdateScenario> updateScenarios(GraphDatabaseService graphDb){
-		List<UpdateScenario> us = Lists.newLinkedList();
-		for(Node p : packages(graphDb)){
-			for(Node d : dependency(p)){
-				for(Update u : update(d)){
-					us.add(new UpdateScenario(u,p));
-				}
-			}
-		}
-		return us;
+		return FluentIterable.from(packages(graphDb)).
+				transformAndConcat(p -> FluentIterable.from(dependency(p)).
+						transformAndConcat(d -> FluentIterable.from(update(d)).
+								transform(u -> new UpdateScenario(u,p))));
 	}
 
 	public static Iterable<Node> provides(Node packagenode){
