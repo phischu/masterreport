@@ -266,9 +266,28 @@ public class Main {
 		return FluentIterable.from(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package)).
 				filter(p -> !Iterables.isEmpty(declares(p)));
 	}
+	public static String packagename(Node packagenode){
+		return (String) packagenode.getProperty("packagename");
+	}
 	public static Iterable<Update> update(Node packagenode){
 		return FluentIterable.from(packagenode.getRelationships(OUTGOING, NEXTVERSION)).
 				transform(r -> new Update((String)r.getProperty("change"), packagenode,r.getEndNode()));
+	}
+	public static Iterable<Update> futureMajorUpdate(Node packagenode){
+		
+		List<Update> futureMajorupdates = Lists.newLinkedList();
+		Iterable<Update> currentUpdates = update(packagenode);
+		
+		while(Iterables.size(currentUpdates) == 1){
+			Update currentUpdate = Iterables.getOnlyElement(currentUpdates);
+			if(currentUpdate.minorMajor.equals("major")){
+				futureMajorupdates.add(new Update("major",packagenode,currentUpdate.package2));
+			}
+			currentUpdates = update(currentUpdate.package2);
+		}
+			
+		return futureMajorupdates;
+		
 	}
 	public static Iterable<Node> dependency(Node packagenode){
 		return new Hop(OUTGOING,DEPENDENCY).apply(packagenode);
@@ -296,6 +315,7 @@ public class Main {
 	public static Iterable<UpdateScenario> updateScenarios(GraphDatabaseService graphDb){
 		return FluentIterable.from(packages(graphDb)).
 				transformAndConcat(p -> FluentIterable.from(dependency(p)).
+						filter(d -> !packagename(d).equals("base")).
 						transformAndConcat(d -> FluentIterable.from(update(d)).
 								transform(u -> new UpdateScenario(u,p))));
 	}
@@ -329,8 +349,8 @@ public class Main {
 				transformAndConcat(d1 ->
 				    FluentIterable.from(binds(d1)).
 				        transformAndConcat(s -> FluentIterable.from(boundBy(s)).
-				            anyMatch(d2 -> package2Declarations.contains(d2) && source(d1).equals(source(d2))) ?
-				            	Collections.singleton(s) : Collections.emptySet()));
+				            transformAndConcat(d2 -> package2Declarations.contains(d2) && !source(d1).equals(source(d2)) ?
+				            	Collections.singleton(s) : Collections.emptySet())));
 		
 	}
 	
