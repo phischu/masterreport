@@ -70,6 +70,7 @@ public class Main {
 			System.out.println("Analysing Updates...");
 
 			List<UpdateScenario> updateScenarioList = Lists.newLinkedList(updateScenarios(graphDb));
+			System.out.println(updateScenarioList.size());
 			List<Boolean> isLegalList = Lists.transform(updateScenarioList, x -> legal(x));
 			List<Boolean> isMinorList = Lists.transform(updateScenarioList, x -> x.update.minorMajor.equals("minor"));
 			List<Boolean> affectsList = Lists.transform(updateScenarioList, x -> affects(x.update,x.packagenode));
@@ -83,7 +84,7 @@ public class Main {
 			Iterable<Node> declarationnodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Declaration);
 			int declarationcount = FluentIterable.from(declarationnodes).size();
 			int declarationastcount = FluentIterable.from(declarationnodes).
-					transform(x -> x.getProperty("declarationast")).
+					transform(x -> source(x)).
 					toSet().
 					size();
 			int symbolcount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Symbol));
@@ -278,7 +279,7 @@ public class Main {
 		List<Update> futureMajorupdates = Lists.newLinkedList();
 		Iterable<Update> currentUpdates = update(packagenode);
 		
-		while(Iterables.size(currentUpdates) == 1){
+		while(!Iterables.isEmpty(currentUpdates)){
 			Update currentUpdate = Iterables.getOnlyElement(currentUpdates);
 			if(currentUpdate.minorMajor.equals("major")){
 				futureMajorupdates.add(new Update("major",packagenode,currentUpdate.package2));
@@ -290,7 +291,9 @@ public class Main {
 		
 	}
 	public static Iterable<Node> dependency(Node packagenode){
-		return new Hop(OUTGOING,DEPENDENCY).apply(packagenode);
+		return FluentIterable.from(new Hop(OUTGOING,DEPENDENCY).apply(packagenode)).
+				filter(d -> !packagename(d).equals("base")).
+				filter(d -> !Iterables.isEmpty(declares(d)));
 	}
 	public static Boolean legal(UpdateScenario updateScenario){
 		Collection<Node> packageDependencies = Sets.newHashSet(dependency(updateScenario.packagenode));
@@ -315,8 +318,7 @@ public class Main {
 	public static Iterable<UpdateScenario> updateScenarios(GraphDatabaseService graphDb){
 		return FluentIterable.from(packages(graphDb)).
 				transformAndConcat(p -> FluentIterable.from(dependency(p)).
-						filter(d -> !packagename(d).equals("base")).
-						transformAndConcat(d -> FluentIterable.from(update(d)).
+						transformAndConcat(d -> FluentIterable.from(futureMajorUpdate(d)).
 								transform(u -> new UpdateScenario(u,p))));
 	}
 
