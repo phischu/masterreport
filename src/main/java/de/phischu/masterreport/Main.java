@@ -70,12 +70,13 @@ public class Main {
 			System.out.println("Analysing Updates...");
 
 			List<UpdateScenario> updateScenarioList = Lists.newLinkedList(updateScenarios(graphDb));
-			System.out.println(updateScenarioList.size());
-			List<Boolean> isLegalList = Lists.transform(updateScenarioList, x -> legal(x));
-			List<Boolean> isMinorList = Lists.transform(updateScenarioList, x -> x.update.minorMajor.equals("minor"));
-			List<Boolean> affectsList = Lists.transform(updateScenarioList, x -> affects(x.update,x.packagenode));
-
-			System.out.println("Counting ...");
+			System.out.println("Update scenarios: " + updateScenarioList.size());
+			List<Boolean> isLegalList = Lists.newArrayList(Lists.transform(updateScenarioList, x -> legal(x)));
+			System.out.println("Legal: " + countTrue(isLegalList));
+			List<Boolean> isMinorList = Lists.newArrayList(Lists.transform(updateScenarioList, x -> x.update.minorMajor.equals("minor")));
+			System.out.println("Minor: " + countTrue(isMinorList));
+			List<Boolean> affectsList = Lists.newArrayList(Lists.transform(updateScenarioList, x -> affects(x.update,x.packagenode)));
+			System.out.println("Affects: " + countTrue(affectsList));
 
 			int hackagecount = 40160;
 			int attemptedpackages = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package));
@@ -88,7 +89,7 @@ public class Main {
 					toSet().
 					size();
 			int symbolcount = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Symbol));
-
+			
 			int updatecount = FluentIterable.from(packages(graphDb)).
 					transformAndConcat(p -> update(p)).
 					size();
@@ -107,7 +108,7 @@ public class Main {
 			int majorallowedcount = countTrue(zipWith(isMinorList,isLegalList,(m,l) -> !m && l));
 			int majorallowedunaffectedcount = countTrue(zipWith3(isMinorList,isLegalList,affectsList,
 					m -> l -> a -> !m && l && !a));
-
+			
 			PrintWriter writer = new PrintWriter("counts", "UTF-8");
 			writer.println("Package count: " + packagecount);
 			writer.println("Declaration count: " + declarationcount);
