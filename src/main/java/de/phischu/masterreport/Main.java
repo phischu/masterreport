@@ -81,6 +81,7 @@ public class Main {
 			int hackagecount = 40160;
 			int attemptedpackages = Iterables.size(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package));
 			int packagecount = Iterables.size(packages(graphDb));
+			int majorpackagecount = Iterables.size(majorPackages(graphDb));
 			
 			Iterable<Node> declarationnodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Declaration);
 			int declarationcount = FluentIterable.from(declarationnodes).size();
@@ -97,6 +98,7 @@ public class Main {
 			
 			int prohibitedcount = countFalse(isLegalList);
 			int prohibitedunaffectedcount = countTrue(zipWith(isLegalList,affectsList,(l,a) -> !l && !a));
+			int allowedunaffectedcount = countTrue(zipWith(isLegalList,affectsList,(l,a) -> l && !a));
 			
 			int minorcount = countTrue(isMinorList);
 			int minorprohibitedcount = countTrue(zipWith(isMinorList,isLegalList,(m,l) -> m && !l));
@@ -111,6 +113,7 @@ public class Main {
 			
 			PrintWriter writer = new PrintWriter("counts", "UTF-8");
 			writer.println("Package count: " + packagecount);
+			writer.println("Major Package count: " + majorpackagecount);
 			writer.println("Declaration count: " + declarationcount);
 			writer.println("Declaration AST count: " + declarationastcount);
 			writer.println("Symbol count: " + symbolcount);
@@ -118,6 +121,7 @@ public class Main {
 			writer.println("Update scenario count: " + updatescenariocount);
 			writer.println("Prohibited: " + prohibitedcount);
 			writer.println("Prohibited Unaffected: " + prohibitedunaffectedcount);
+			writer.println("Allowed Unaffected: " + allowedunaffectedcount);
 			writer.println("Minor: " + minorcount);
 			writer.println("Minor Prohibited: " + minorprohibitedcount);
 			writer.println("Major: " + majorcount);
@@ -268,33 +272,73 @@ public class Main {
 		return FluentIterable.from(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package)).
 				filter(p -> !Iterables.isEmpty(declares(p)));
 	}
+	public static Iterable<Node> majorPackages(GraphDatabaseService graphDb){
+		return FluentIterable.from(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package)).
+				filter(p -> !Iterables.isEmpty(declares(p))).
+				filter(p -> FluentIterable.from(p.getRelationships(INCOMING,NEXTVERSION)).allMatch(r -> r.getProperty("change").equals("major")));
+	}
 	public static String packagename(Node packagenode){
 		return (String) packagenode.getProperty("packagename");
 	}
 	public static Iterable<Update> update(Node packagenode){
 		return FluentIterable.from(packagenode.getRelationships(OUTGOING, NEXTVERSION)).
+				filter(r -> !Iterables.isEmpty(declares(r.getEndNode()))).
 				transform(r -> new Update((String)r.getProperty("change"), packagenode,r.getEndNode()));
 	}
-	public static Iterable<Update> futureMajorUpdate(Node packagenode){
-		
-		List<Update> futureMajorupdates = Lists.newLinkedList();
-		Iterable<Update> currentUpdates = update(packagenode);
+	public static Iterable<Update> majorUpdate(Node packagenode){
+
+        Iterable<Update> currentUpdates = Lists.newArrayList(update(packagenode));
 		
 		while(!Iterables.isEmpty(currentUpdates)){
 			Update currentUpdate = Iterables.getOnlyElement(currentUpdates);
 			if(currentUpdate.minorMajor.equals("major")){
-				futureMajorupdates.add(new Update("major",packagenode,currentUpdate.package2));
+				return Collections.singleton(new Update("major",packagenode,currentUpdate.package2));
 			}
-			currentUpdates = update(currentUpdate.package2);
+			currentUpdates = Lists.newArrayList(update(currentUpdate.package2));
+		}
+		return Collections.emptyList();
+	} 
+	public static Iterable<Update> futureMajorUpdate(Node packagenode){
+		
+		List<Update> futureMajorupdates = Lists.newLinkedList();
+		Iterable<Update> currentUpdates = Lists.newArrayList(update(packagenode));
+		
+		while(!Iterables.isEmpty(currentUpdates)){
+			Update currentUpdate = Iterables.getOnlyElement(currentUpdates);
+			futureMajorupdates.add(new Update("major",packagenode,currentUpdate.package2));
+			currentUpdates = Lists.newArrayList(update(currentUpdate.package2));
 		}
 			
 		return futureMajorupdates;
+		
+	}
+public static Iterable<Update> futureUpdate(Node packagenode){
+		
+		List<Update> futureUpdates = Lists.newLinkedList();
+		Iterable<Update> currentUpdates = Lists.newArrayList(update(packagenode));
+		Boolean minor = true;
+		
+		while(!Iterables.isEmpty(currentUpdates)){
+			Update currentUpdate = Iterables.getOnlyElement(currentUpdates);
+			if(currentUpdate.minorMajor.equals("major")) minor = false;
+			
+			futureUpdates.add(new Update(minor ? "minor" : "major",packagenode,currentUpdate.package2));
+			currentUpdates = Lists.newArrayList(update(currentUpdate.package2));
+		}
+			
+		return futureUpdates;
 		
 	}
 	public static Iterable<Node> dependency(Node packagenode){
 		return FluentIterable.from(new Hop(OUTGOING,DEPENDENCY).apply(packagenode)).
 				filter(d -> !packagename(d).equals("base")).
 				filter(d -> !Iterables.isEmpty(declares(d)));
+	}
+	public static Iterable<Node> majorDependency(Node packagenode){
+		return FluentIterable.from(new Hop(OUTGOING,DEPENDENCY).apply(packagenode)).
+				filter(d -> !packagename(d).equals("base")).
+				filter(d -> !Iterables.isEmpty(declares(d))).
+				filter(d -> FluentIterable.from(d.getRelationships(INCOMING,NEXTVERSION)).allMatch(r -> r.getProperty("change").equals("major")));
 	}
 	public static Boolean legal(UpdateScenario updateScenario){
 		Collection<Node> packageDependencies = Sets.newHashSet(dependency(updateScenario.packagenode));
@@ -319,6 +363,12 @@ public class Main {
 	public static Iterable<UpdateScenario> updateScenarios(GraphDatabaseService graphDb){
 		return FluentIterable.from(packages(graphDb)).
 				transformAndConcat(p -> FluentIterable.from(dependency(p)).
+						transformAndConcat(d -> FluentIterable.from(futureUpdate(d)).
+								transform(u -> new UpdateScenario(u,p))));
+	}
+	public static Iterable<UpdateScenario> majorUpdateScenarios(GraphDatabaseService graphDb){
+		return FluentIterable.from(majorPackages(graphDb)).
+				transformAndConcat(p -> FluentIterable.from(majorDependency(p)).
 						transformAndConcat(d -> FluentIterable.from(futureMajorUpdate(d)).
 								transform(u -> new UpdateScenario(u,p))));
 	}
