@@ -6,6 +6,7 @@ import static de.phischu.masterreport.Main.Labels.Symbol;
 import static de.phischu.masterreport.RelationshipTypes.DECLARATION;
 import static de.phischu.masterreport.RelationshipTypes.DECLAREDSYMBOL;
 import static de.phischu.masterreport.RelationshipTypes.DEPENDENCY;
+import static de.phischu.masterreport.RelationshipTypes.INSTALLATION;
 import static de.phischu.masterreport.RelationshipTypes.MENTIONEDSYMBOL;
 import static de.phischu.masterreport.RelationshipTypes.NEXTVERSION;
 import static org.neo4j.graphdb.Direction.INCOMING;
@@ -19,13 +20,10 @@ import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map.Entry;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -221,29 +219,7 @@ public class Main {
 		ChartUtilities.saveChartAsPNG(new File(outputpath), chart, 1024, 768);
 
 	}
-/*
-	public static Boolean installable(ConcreteUpdate update) {
 
-		System.out.println("Trying to install: ");
-		System.out.println(update.packagename + "-" + update.packageversion);
-		System.out.println("with");
-		System.out.println("--constraint=\"" + update.dependencyname2 + "==" + update.dependencyversion2 + "\"");
-		try {
-			systemCall("cabal","sandbox","delete");
-			systemCall("cabal","sandbox","init");
-			Integer exitcode = systemCall("cabal", "install", "--reinstall", "--force-reinstalls",
-					"--disable-documentation",
-					"--disable-library-profiling", "--allow-newer=" + update.dependencyname2, "--constraint="
-							+ update.dependencyname2 + "==" + update.dependencyversion2, update.packagename + "-"
-							+ update.packageversion);
-			System.out.println(exitcode);
-			return exitcode.equals(0);
-		} catch (InterruptedException | IOException e) {
-			e.printStackTrace();
-			return false;
-		}
-	}
-*/
 	public static int systemCall(String... command) throws InterruptedException, IOException {
 
 		ProcessBuilder processbuilder = new ProcessBuilder(command);
@@ -359,6 +335,9 @@ public static Iterable<Update> futureUpdate(Node packagenode){
 	}
 	public static String source(Node declarationnode){
 		return (String) declarationnode.getProperty("declarationast");
+	}
+	public static Iterable<Node> installed_dependency(Node packagenode){
+		return new Hop(OUTGOING,INSTALLATION).apply(packagenode);
 	}
 	public static Iterable<UpdateScenario> updateScenarios(GraphDatabaseService graphDb){
 		return FluentIterable.from(packages(graphDb)).
@@ -483,6 +462,37 @@ public static Iterable<Update> futureUpdate(Node packagenode){
 		return usages;
 
 	}
+	
+	public static Iterable<Node> uses(Node declarationnode){
+		return FluentIterable.from(Collections.singleton(declarationnode))
+				.transformAndConcat(d -> mentions(d))
+				.transformAndConcat(s -> boundBy(s));
+	}
+	
+	public static Iterable<Node> uses_transitively(Node declarationnode){
+		HashSet<Node> used_declarationnodes = Sets.newHashSet(uses(declarationnode));
+		do{
+			HashSet<Node> next_declarationnodes = Sets.newHashSet(FluentIterable
+					.from(used_declarationnodes)
+					.transformAndConcat(d -> uses(d)));
+			if(used_declarationnodes.equals(next_declarationnodes)){
+				return used_declarationnodes;
+			}
+		}while(true);
+	}
+	
+	public static Iterable<Node> installed_declaration(Node packagenode){
+		return FluentIterable.from(Collections.singleton(packagenode))
+				.transformAndConcat(p -> installed_dependency(p))
+				.transformAndConcat(i -> declares(i));
+	}
+	
+	public static Iterable<Node> actually_uses_declaration(Node packagenode){
+		HashSet<Node> installed_declarations = Sets.newHashSet(installed_declaration(packagenode));
+		HashSet<Node> used_declarations = Sets.newHashSet(FluentIterable.from(declares(packagenode))
+				.transformAndConcat(d -> uses_transitively(d)));
+		return Sets.intersection(installed_declarations, used_declarations);
+	}
 
 	private static boolean containsAll(Iterable<? extends Object> nodes1, Iterable<? extends Object> nodes2) {
 
@@ -491,172 +501,6 @@ public static Iterable<Update> futureUpdate(Node packagenode){
 				return false;
 		}
 		return true;
-	}
-
-	public static void generateSlices(GraphDatabaseService graphDb) {
-
-		// global map of all slices for each declaration
-		HashMap<Node, List<Slice>> slices = new HashMap<Node, List<Slice>>();
-
-		// for each declaration
-		for (Node declarationnode : GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Declaration)) {
-			
-			System.out.println(Iterables.size(generateDeclarationSlices(slices, declarationnode)));	
-
-		}
-
-	}
-
-	public static List<Slice> generateDeclarationSlices(HashMap<Node, List<Slice>> slices, Node declarationnode) {
-
-		List<Slice> declarationSlices = slices.get(declarationnode);
-
-		if (declarationSlices == null) {
-
-			// for each symbol the set of slices that might be used
-			List<Set<Slice>> choicePoints = Lists.newArrayList();
-
-			// for each symbol
-			for (Node symbolnode : new Hop(OUTGOING, MENTIONEDSYMBOL).apply(declarationnode)) {
-
-				// declarations declaring this symbol and are a proper dependency
-				List<Node> usedDeclarations = Lists.newLinkedList();
-				for(Node usedDeclarationNode : new Hop(INCOMING, DECLAREDSYMBOL).apply(symbolnode)){
-					
-					Iterable<Node> dependencynodes = FluentIterable.from(Collections.singleton(declarationnode))
-							.transformAndConcat(new Hop(INCOMING, DECLARATION))
-							.transformAndConcat(new Hop(OUTGOING, DEPENDENCY));
-
-					Iterable<Node> usedpackagenodes = new Hop(INCOMING, DECLARATION).apply(usedDeclarationNode);
-
-					if (containsAll(dependencynodes, usedpackagenodes)) {
-						usedDeclarations.add(usedDeclarationNode);
-					}
-					
-				}
-
-				// if there is nor declaration for this symbol it is primitive
-				// (probably from base)
-				if (Iterables.isEmpty(usedDeclarations)) {
-
-					// create a primitive slice for this symbol
-					Slice primitiveSlice = new Slice(new Integer(Objects.hash(recoverSymbol(symbolnode))),
-							Collections.<Integer> emptySet(), Collections.<Symbol, Integer> emptyMap());
-
-					// add this single choice for this symbol to the list of
-					// choices
-					choicePoints.add(Collections.singleton(primitiveSlice));
-
-				} else {
-
-					// set of options we will have
-					Set<Slice> choicePoint = Sets.newHashSet();
-
-					// for every declaration used
-					for (Node usedDeclaration : usedDeclarations) {
-
-						// if used declaration is same as this one disregard it
-						if (usedDeclaration.equals(declarationnode))
-							continue;
-						
-						// add all slices for the declaration
-						choicePoint.addAll(generateDeclarationSlices(slices, usedDeclaration));
-
-					}
-					// add the options for this symbol
-					choicePoints.add(choicePoint);
-
-				}
-
-			}
-
-			// actual choices from possible choices
-			Set<List<Slice>> choices = Sets.cartesianProduct(choicePoints);
-
-			// for every choice of slices
-			for (List<Slice> choice : choices) {
-
-				// every slice should only be used once
-				Set<Slice> uses = new HashSet<Slice>(choice);
-
-				// the hashes of all used slices
-				Set<Integer> usedHashes = Sets.newHashSet(Iterables.transform(uses, use -> use.hash));
-
-				// the ast of this declaration
-				String ast = (String) declarationnode.getProperty("declarationast");
-
-				// the hash for this slice
-				Integer hash = Objects.hash(ast, uses);
-
-				Boolean consistent = true;
-
-				// empty map from symbol to slice hash to find conflicts
-				HashMap<Symbol, Integer> symbols = new HashMap<Symbol, Integer>();
-
-				// insert symbols declared by this slice
-				for (Node symbolnode : new Hop(OUTGOING, DECLAREDSYMBOL).apply(declarationnode)) {
-
-					// put the symbol for this slice into the symbol map
-					symbols.put(recoverSymbol(symbolnode), hash);
-
-				}
-
-				// for every used slice
-				for (Slice use : uses) {
-
-					// for every symbol
-					for (Entry<Symbol, Integer> entry : use.symbols.entrySet()) {
-
-						Symbol symbol = entry.getKey();
-						Integer presentHash = symbols.get(symbol);
-						Integer newHash = entry.getValue();
-
-						// if symbol is not present insert it
-						if (presentHash == null) {
-							symbols.put(symbol, newHash);
-						} else {
-							
-							// if symbol is present but different we have a inconsistency
-							if (presentHash != newHash) {
-								consistent = false;
-								break;
-							}
-						}
-
-					}
-					if (!consistent)
-						break;
-
-				}
-
-				// if symbol usage is consistent
-				if (consistent) {
-
-					Slice slice = new Slice(hash, usedHashes, symbols);
-					// add this slice to the slices for this declaration
-					if(slices.get(declarationnode) == null){
-						slices.put(declarationnode, Lists.newArrayList(slice));
-					}else{
-						slices.get(declarationnode).add(slice);
-					}
-				}
-
-			}
-			return slices.get(declarationnode);
-
-		} else {
-			// return the slices found earlier
-			return declarationSlices;
-		}
-
-	}
-
-	private static Symbol recoverSymbol(Node symbolnode) {
-
-		String symbolname = (String) symbolnode.getProperty("symbolname");
-		String symbolmodule = (String) symbolnode.getProperty("symbolmodule");
-		String symbolgenre = (String) symbolnode.getProperty("symbolgenre");
-		return new Symbol(new Origin(symbolmodule, symbolname), symbolgenre);
 	}
 
 }
