@@ -22,7 +22,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.BiFunction;
@@ -37,7 +36,6 @@ import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
-import org.neo4j.helpers.Pair;
 import org.neo4j.tooling.GlobalGraphOperations;
 
 import com.google.common.collect.FluentIterable;
@@ -65,17 +63,15 @@ public class Main {
 			
 			System.out.println("Finding actually used declarations");
 			
-			Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package);
-			
 			PrintWriter actually_used_file = new PrintWriter("actually_used", "UTF-8");
 			
-			for(Node packagenode : packagenodes){
+			for(Node packagenode : packages(graphDb)){
 				
 				String packagename = (String)packagenode.getProperty("packagename");
 				String packageversion = (String)packagenode.getProperty("packageversion");
 				int installed_declarations_count = Iterables.size(installed_declaration(packagenode));
 				int actually_used_declarations_count = Iterables.size(actually_uses_declaration(packagenode));
-				System.out.println(
+				actually_used_file.println(
 						packagename + "-" +
 						packageversion + " " +
 						installed_declarations_count + " " + 
@@ -151,7 +147,7 @@ public class Main {
 			counts_file.close();
 
 			System.out.println("Printing Refactorings...");
-			printRefactorings(Sets.newHashSet(replaces(graphDb)));
+			printRefactorings(same_usages(graphDb));
 
 			System.out.println("Plotting ...");
 
@@ -250,16 +246,19 @@ public class Main {
 
 	}
 
-	public static void printRefactorings(Collection<Pair<String, String>> astpairs) throws FileNotFoundException,
+	public static void printRefactorings(Iterable<Iterable<String>> ast_groups) throws FileNotFoundException,
 			UnsupportedEncodingException {
 
 		PrintWriter writer = new PrintWriter("refactorings", "UTF-8");
-		writer.println(astpairs.size());
-		for (Pair<String, String> astpair : astpairs) {
-			writer.println("AST ONE");
-			writer.println(astpair.first());
-			writer.println("AST TWO");
-			writer.println(astpair.other());
+		writer.println(Iterables.size(ast_groups));
+		for (Iterable<String> ast_group : ast_groups) {
+			if(Iterables.size(ast_group) == 1) continue;
+			writer.println("============================================================================");
+			for(String ast : ast_group){
+				writer.println("----------------------------------------------------------------------------");
+				writer.println(ast);
+			}
+			writer.println("============================================================================");
 		}
 		writer.close();
 
@@ -267,6 +266,9 @@ public class Main {
 	public static Iterable<Node> packages(GraphDatabaseService graphDb){
 		return FluentIterable.from(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package)).
 				filter(p -> !Iterables.isEmpty(declares(p)));
+	}
+	public static Iterable<Node> declarations(GraphDatabaseService graphDb){
+		return GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Declaration);
 	}
 	public static Iterable<Node> majorPackages(GraphDatabaseService graphDb){
 		return FluentIterable.from(GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package)).
@@ -343,6 +345,9 @@ public static Iterable<Update> futureUpdate(Node packagenode){
 	}
 	public static Iterable<Node> declares(Node packagenode){
 		return new Hop(OUTGOING,DECLARATION).apply(packagenode);
+	}
+	public static Iterable<Node> declaredIn(Node declarationnode){
+		return new Hop(INCOMING,DECLARATION).apply(declarationnode);
 	}
 	public static Iterable<Node> binds(Node declarationnode){
 		return new Hop(OUTGOING,DECLAREDSYMBOL).apply(declarationnode);
@@ -428,25 +433,32 @@ public static Iterable<Update> futureUpdate(Node packagenode){
 				anyMatch(s -> brokenSymbols.contains(s));
 	}
 	
-	public static Iterable<Pair<String,String>> replaces(GraphDatabaseService graphDb){
-		Iterable<Pair<Node,Node>> same_source_declaration_pairs = same_source(graphDb);
-		Set<Pair<String,String>> result = Sets.newHashSet();
-		for(Pair<Node,Node> same_source_declaration_pair : same_source_declaration_pairs){
-			for(Node replacing_declaration : uses_legally(same_source_declaration_pair.first())){
-				for(Node replaced_declaration : uses_legally(same_source_declaration_pair.other())){
-					result.add(Pair.of(source(replacing_declaration), source(replaced_declaration)));
-				}
-			}
-		}
-		return result;
+	public static Iterable<Iterable<String>> same_usages(GraphDatabaseService graphDb){
+		return FluentIterable
+				.from(same_source(graphDb))
+				.transform(using_declarations -> Sets.newHashSet(FluentIterable
+						.from(using_declarations)
+						.transformAndConcat(using_declaration -> uses_legally(using_declaration))
+						.transform(used_declaration -> source(used_declaration))));
 	}
 	
-	public static Iterable<Pair<Node,Node>> same_source(GraphDatabaseService graphDb){
-		return Collections.emptySet();
+	public static Iterable<Iterable<Node>> same_source(GraphDatabaseService graphDb){
+		HashSet<String> sources = Sets.newHashSet(FluentIterable
+				.from(declarations(graphDb))
+				.transform(d -> source(d)));
+		return FluentIterable
+				.from(sources)
+				.transform(ast -> graphDb.findNodesByLabelAndProperty(Declaration, "declarationast", ast));
 	}
 	
 	public static Iterable<Node> uses_legally(Node using_declaration){
-		return Collections.emptySet();
+		return FluentIterable
+				.from(uses(using_declaration))
+				.filter(used_declaration -> {
+					Node using_package = Iterables.get(declaredIn(using_declaration),0);
+					Node used_package = Iterables.get(declaredIn(used_declaration),0);
+					return Iterables.contains(dependency(using_package), used_package);
+				});
 	}
 	
 	public static Iterable<Node> uses(Node declarationnode){
@@ -462,10 +474,10 @@ public static Iterable<Update> futureUpdate(Node packagenode){
 					    .from(used_declarationnodes)
 					    .transformAndConcat(d -> uses(d)));
 			next_declarationnodes.retainAll(installed_declarations);
-			if(used_declarationnodes.equals(next_declarationnodes)){
+			if(used_declarationnodes.containsAll(next_declarationnodes)){
 				return used_declarationnodes;
 			}else{
-				used_declarationnodes = next_declarationnodes;
+				used_declarationnodes.addAll(next_declarationnodes);
 			}
 		}while(true);
 	}
@@ -481,15 +493,6 @@ public static Iterable<Update> futureUpdate(Node packagenode){
 		HashSet<Node> used_declarations = Sets.newHashSet(FluentIterable.from(declares(packagenode))
 				.transformAndConcat(d -> actually_uses_transitively(installed_declarations, d)));
 		return Sets.intersection(installed_declarations, used_declarations);
-	}
-
-	private static boolean containsAll(Iterable<? extends Object> nodes1, Iterable<? extends Object> nodes2) {
-
-		for (Object node2 : nodes2) {
-			if (!Iterables.contains(nodes1, node2))
-				return false;
-		}
-		return true;
 	}
 
 }
