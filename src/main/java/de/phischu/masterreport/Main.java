@@ -63,7 +63,27 @@ public class Main {
 		Transaction tx = graphDb.beginTx();
 		try {
 			
-			//generateSlices(graphDb);
+			System.out.println("Finding actually used declarations");
+			
+			Iterable<Node> packagenodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Package);
+			
+			PrintWriter actually_used_file = new PrintWriter("actually_used", "UTF-8");
+			
+			for(Node packagenode : packagenodes){
+				
+				String packagename = (String)packagenode.getProperty("packagename");
+				String packageversion = (String)packagenode.getProperty("packageversion");
+				int installed_declarations_count = Iterables.size(installed_declaration(packagenode));
+				int actually_used_declarations_count = Iterables.size(actually_uses_declaration(packagenode));
+				System.out.println(
+						packagename + "-" +
+						packageversion + " " +
+						installed_declarations_count + " " + 
+						actually_used_declarations_count);
+				
+			}
+			
+			actually_used_file.close();
 
 			System.out.println("Analysing Updates...");
 
@@ -109,29 +129,29 @@ public class Main {
 			int majorallowedunaffectedcount = countTrue(zipWith3(isMinorList,isLegalList,affectsList,
 					m -> l -> a -> !m && l && !a));
 			
-			PrintWriter writer = new PrintWriter("counts", "UTF-8");
-			writer.println("Package count: " + packagecount);
-			writer.println("Major Package count: " + majorpackagecount);
-			writer.println("Declaration count: " + declarationcount);
-			writer.println("Declaration AST count: " + declarationastcount);
-			writer.println("Symbol count: " + symbolcount);
-			writer.println("Update count: " + updatecount);
-			writer.println("Update scenario count: " + updatescenariocount);
-			writer.println("Prohibited: " + prohibitedcount);
-			writer.println("Prohibited Unaffected: " + prohibitedunaffectedcount);
-			writer.println("Allowed Unaffected: " + allowedunaffectedcount);
-			writer.println("Minor: " + minorcount);
-			writer.println("Minor Prohibited: " + minorprohibitedcount);
-			writer.println("Major: " + majorcount);
-			writer.println("Major Prohibited: " + majorprohibitedcount);
-			writer.println("Major Prohibited Unaffected: " + majorprohibitedunaffectedcount);
-			writer.println("Major Allowed: " + majorallowedcount);
-			writer.println("Major Allowed Unaffected: " + majorallowedunaffectedcount);
+			PrintWriter counts_file = new PrintWriter("counts", "UTF-8");
+			counts_file.println("Package count: " + packagecount);
+			counts_file.println("Major Package count: " + majorpackagecount);
+			counts_file.println("Declaration count: " + declarationcount);
+			counts_file.println("Declaration AST count: " + declarationastcount);
+			counts_file.println("Symbol count: " + symbolcount);
+			counts_file.println("Update count: " + updatecount);
+			counts_file.println("Update scenario count: " + updatescenariocount);
+			counts_file.println("Prohibited: " + prohibitedcount);
+			counts_file.println("Prohibited Unaffected: " + prohibitedunaffectedcount);
+			counts_file.println("Allowed Unaffected: " + allowedunaffectedcount);
+			counts_file.println("Minor: " + minorcount);
+			counts_file.println("Minor Prohibited: " + minorprohibitedcount);
+			counts_file.println("Major: " + majorcount);
+			counts_file.println("Major Prohibited: " + majorprohibitedcount);
+			counts_file.println("Major Prohibited Unaffected: " + majorprohibitedunaffectedcount);
+			counts_file.println("Major Allowed: " + majorallowedcount);
+			counts_file.println("Major Allowed Unaffected: " + majorallowedunaffectedcount);
 
-			writer.close();
+			counts_file.close();
 
 			System.out.println("Printing Refactorings...");
-			printRefactorings(Sets.newHashSet(refactorings(graphDb)));
+			printRefactorings(Sets.newHashSet(replaces(graphDb)));
 
 			System.out.println("Plotting ...");
 
@@ -408,59 +428,25 @@ public static Iterable<Update> futureUpdate(Node packagenode){
 				anyMatch(s -> brokenSymbols.contains(s));
 	}
 	
-	public static Collection<Pair<String, String>> refactorings(GraphDatabaseService graphDb) {
-
-		Collection<Pair<String, String>> declarationastpairs = new LinkedList<Pair<String, String>>();
-
-		Iterable<Node> symbolnodes = GlobalGraphOperations.at(graphDb).getAllNodesWithLabel(Symbol);
-
-		for (Node symbolnode : symbolnodes) {
-
-			Collection<Pair<Node, Node>> usages = Lists.newArrayList(usages(symbolnode));
-
-			for (Pair<Node, Node> usage1 : usages) {
-				for (Pair<Node, Node> usage2 : usages) {
-
-					String usingast1 = (String) usage1.first().getProperty("declarationast");
-					String usedast1 = (String) usage1.other().getProperty("declarationast");
-					String usingast2 = (String) usage2.first().getProperty("declarationast");
-					String usedast2 = (String) usage2.other().getProperty("declarationast");
-
-					if (usingast1.equals(usingast2) && !usedast1.equals(usedast2)) {
-						declarationastpairs.add(Pair.of(usedast1, usedast2));
-					}
+	public static Iterable<Pair<String,String>> replaces(GraphDatabaseService graphDb){
+		Iterable<Pair<Node,Node>> same_source_declaration_pairs = same_source(graphDb);
+		Set<Pair<String,String>> result = Sets.newHashSet();
+		for(Pair<Node,Node> same_source_declaration_pair : same_source_declaration_pairs){
+			for(Node replacing_declaration : uses_legally(same_source_declaration_pair.first())){
+				for(Node replaced_declaration : uses_legally(same_source_declaration_pair.other())){
+					result.add(Pair.of(source(replacing_declaration), source(replaced_declaration)));
 				}
 			}
 		}
-
-		return declarationastpairs;
-
+		return result;
 	}
-
-	public static Iterable<Pair<Node, Node>> usages(Node symbolnode) {
-
-		LinkedList<Pair<Node, Node>> usages = new LinkedList<Pair<Node, Node>>();
-
-		Iterable<Node> usingdeclarationnodes = new Hop(INCOMING, MENTIONEDSYMBOL).apply(symbolnode);
-		Iterable<Node> useddeclarationnodes = new Hop(INCOMING, DECLAREDSYMBOL).apply(symbolnode);
-
-		for (Node usingdeclarationnode : usingdeclarationnodes) {
-			for (Node useddeclarationnode : useddeclarationnodes) {
-
-				Iterable<Node> dependencynodes = FluentIterable.from(Collections.singleton(usingdeclarationnode))
-						.transformAndConcat(new Hop(INCOMING, DECLARATION))
-						.transformAndConcat(new Hop(OUTGOING, DEPENDENCY));
-
-				Iterable<Node> usedpackagenodes = new Hop(INCOMING, DECLARATION).apply(useddeclarationnode);
-
-				if (containsAll(dependencynodes, usedpackagenodes)) {
-					usages.add(Pair.of(usingdeclarationnode, useddeclarationnode));
-				}
-			}
-		}
-
-		return usages;
-
+	
+	public static Iterable<Pair<Node,Node>> same_source(GraphDatabaseService graphDb){
+		return Collections.emptySet();
+	}
+	
+	public static Iterable<Node> uses_legally(Node using_declaration){
+		return Collections.emptySet();
 	}
 	
 	public static Iterable<Node> uses(Node declarationnode){
@@ -469,14 +455,17 @@ public static Iterable<Update> futureUpdate(Node packagenode){
 				.transformAndConcat(s -> boundBy(s));
 	}
 	
-	public static Iterable<Node> uses_transitively(Node declarationnode){
+	public static Iterable<Node> actually_uses_transitively(HashSet<Node> installed_declarations, Node declarationnode){
 		HashSet<Node> used_declarationnodes = Sets.newHashSet(uses(declarationnode));
 		do{
 			HashSet<Node> next_declarationnodes = Sets.newHashSet(FluentIterable
-					.from(used_declarationnodes)
-					.transformAndConcat(d -> uses(d)));
+					    .from(used_declarationnodes)
+					    .transformAndConcat(d -> uses(d)));
+			next_declarationnodes.retainAll(installed_declarations);
 			if(used_declarationnodes.equals(next_declarationnodes)){
 				return used_declarationnodes;
+			}else{
+				used_declarationnodes = next_declarationnodes;
 			}
 		}while(true);
 	}
@@ -490,7 +479,7 @@ public static Iterable<Update> futureUpdate(Node packagenode){
 	public static Iterable<Node> actually_uses_declaration(Node packagenode){
 		HashSet<Node> installed_declarations = Sets.newHashSet(installed_declaration(packagenode));
 		HashSet<Node> used_declarations = Sets.newHashSet(FluentIterable.from(declares(packagenode))
-				.transformAndConcat(d -> uses_transitively(d)));
+				.transformAndConcat(d -> actually_uses_transitively(installed_declarations, d)));
 		return Sets.intersection(installed_declarations, used_declarations);
 	}
 
